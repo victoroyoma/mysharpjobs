@@ -1,0 +1,16 @@
+/* PLEASE NOTE: THESE TAILWIND IMPORTS SHOULD NEVER BE DELETED */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+/* DO NOT DELETE THESE TAILWIND IMPORTS, OTHERWISE THE STYLING WILL NOT RENDER AT ALL */
+/* Custom styles for toggle switch */
+.toggle-checkbox:checked {
+  right: 0;
+  border-color: #3B82F6;
+}
+.toggle-checkbox:checked + .toggle-label {
+  background-color: #3B82F6;
+}
+.toggle-label {
+  transition: background-color 0.2s ease;
+}
