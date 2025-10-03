@@ -16,7 +16,7 @@ export default function Header() {
     <>
       {user?.type === 'client' && (
         <>
-          <Link to="/client/dashboard/enhanced" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+          <Link to="/client/dashboard" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
             Dashboard
           </Link>
           <Link to="/post-job" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
@@ -41,7 +41,7 @@ export default function Header() {
         Messages
       </Link>
       {user?.type === 'admin' && (
-        <Link to="/admin/dashboard/enhanced" className="text-gray-700 hover:text-red-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+        <Link to="/admin/dashboard" className="text-gray-700 hover:text-red-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
           Admin Dashboard
         </Link>
       )}
@@ -193,7 +193,7 @@ export default function Header() {
                 {user?.type === 'client' ? (
                   <>
                     <Link 
-                      to="/client/dashboard/enhanced" 
+                      to="/client/dashboard" 
                       className="block px-3 py-3 rounded-lg text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200" 
                       onClick={() => setIsMenuOpen(false)}
                     >
@@ -227,7 +227,7 @@ export default function Header() {
                 ) : user?.type === 'admin' ? (
                   <>
                     <Link 
-                      to="/admin/dashboard/enhanced" 
+                      to="/admin/dashboard" 
                       className="block px-3 py-3 rounded-lg text-base font-medium text-red-700 hover:text-red-800 hover:bg-red-50 transition-all duration-200" 
                       onClick={() => setIsMenuOpen(false)}
                     >

@@ -83,3 +83,4 @@ There's an unrelated error with the MapSearch component (returns void instead of
 The admin dashboard is now fully integrated and ready for use. It provides comprehensive administrative control over the MysharpJob platform with real-time monitoring, dispute resolution, analytics, and user management capabilities.
 
 **Access the dashboard at: `/admin/dashboard`**
+

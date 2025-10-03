@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   BriefcaseIcon, 
@@ -26,46 +26,87 @@ import {
   PhoneIcon
 } from 'lucide-react';
 import Button from '../../components/Button';
-import { 
-  mockClients, 
-  getJobsByClient, 
-  getNotificationsByUser, 
-  getArtisansByLocation
-} from '../../data/mockData';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { profileApi } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ClientDashboard() {
+  const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [favoriteArtisans, setFavoriteArtisans] = useState<string[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'week' | 'month' | 'year'>('month');
   const [showUrgentOnly, setShowUrgentOnly] = useState(false);
+
+  // Fetch dashboard data from API
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        const response = await profileApi.getClientDashboard();
+        setDashboardData(response.data);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load dashboard data');
+        console.error('Dashboard error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.type === 'client') {
+      fetchDashboard();
+    }
+  }, [user]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error || !dashboardData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h2>
+          <p className="text-gray-600 mb-4">{error || 'Unable to load dashboard data'}</p>
+          <Button onClick={() => window.location.reload()}>Reload Page</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract data from API response
+  const currentClient = dashboardData.user;
+  const clientJobs = dashboardData.recent_jobs || [];
+  const stats = dashboardData.stats || {};
+  const unreadNotifications = 0; // TODO: Implement notifications
   
-  // Get current client (using first client for demo)
-  const currentClient = mockClients[0];
-  const clientJobs = getJobsByClient(currentClient.id);
-  const clientNotifications = getNotificationsByUser(currentClient.id);
-  const nearbyArtisans = getArtisansByLocation(currentClient.location);
-  const unreadNotifications = clientNotifications.filter(n => !n.isRead).length;
-  
-  // Filter urgent notifications and jobs
-  const urgentNotifications = clientNotifications.filter(n => n.priority === 'high' && !n.isRead);
-  
-  // Budget calculations
-  const totalBudgetSpent = clientJobs
-    .filter(j => j.status === 'completed')
-    .reduce((sum, job) => sum + job.budget, 0);
-  
+  // Budget calculations using stats from API
+  const totalBudgetSpent = stats.total_spent || 0;
   const pendingBudget = clientJobs
-    .filter(j => j.status === 'in-progress')
-    .reduce((sum, job) => sum + job.budget, 0);
+    .filter((j: any) => j.status === 'in-progress')
+    .reduce((sum: number, job: any) => sum + (job.budget || 0), 0);
   
   const monthlySpending = clientJobs
-    .filter(j => {
-      const jobDate = new Date(j.createdAt);
+    .filter((j: any) => {
+      const jobDate = new Date(j.created_at);
       const now = new Date();
       return jobDate.getMonth() === now.getMonth() && 
              jobDate.getFullYear() === now.getFullYear() &&
              j.status === 'completed';
     })
-    .reduce((sum, job) => sum + job.budget, 0);
+    .reduce((sum: number, job: any) => sum + (job.budget || 0), 0);
+  
+  // Mock data for features not yet in API
+  const nearbyArtisans: any[] = []; // TODO: Implement nearby artisans API
+  const urgentNotifications: any[] = []; // TODO: Implement notifications API
 
   const toggleFavorite = (artisanId: string) => {
     setFavoriteArtisans(prev => 
@@ -154,7 +195,7 @@ export default function ClientDashboard() {
               <ClockIcon className="w-8 h-8 text-orange-600" />
             </div>
             <div className="mt-2">
-              <span className="text-sm text-gray-600">{clientJobs.filter(j => j.status === 'in-progress').length} active jobs</span>
+              <span className="text-sm text-gray-600">{stats.active_jobs || 0} active jobs</span>
             </div>
           </div>
           
@@ -168,7 +209,7 @@ export default function ClientDashboard() {
             </div>
             <div className="mt-2">
               <span className="text-sm text-blue-600">
-                {clientJobs.filter(j => new Date(j.createdAt).getMonth() === new Date().getMonth()).length} jobs this month
+                {clientJobs.filter((j: any) => new Date(j.created_at).getMonth() === new Date().getMonth()).length} jobs this month
               </span>
             </div>
           </div>
@@ -178,13 +219,13 @@ export default function ClientDashboard() {
               <div>
                 <p className="text-sm text-gray-600">Success Rate</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {Math.round((clientJobs.filter(j => j.status === 'completed').length / clientJobs.length) * 100)}%
+                  {clientJobs.length > 0 ? Math.round((stats.completed_jobs / stats.total_jobs_posted) * 100) : 0}%
                 </p>
               </div>
               <TrendingUpIcon className="w-8 h-8 text-purple-600" />
             </div>
             <div className="mt-2">
-              <span className="text-sm text-purple-600">{clientJobs.filter(j => j.status === 'completed').length} completed jobs</span>
+              <span className="text-sm text-purple-600">{stats.completed_jobs || 0} completed jobs</span>
             </div>
           </div>
         </div>
@@ -263,7 +304,7 @@ export default function ClientDashboard() {
                 </div>
               </div>
               <div className="space-y-4">
-                {clientJobs.slice(0, 3).map((job) => (
+                {clientJobs.slice(0, 3).map((job: any) => (
                   <div key={job.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${getJobPriorityColor(job.priority || 'low')}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -424,7 +465,7 @@ export default function ClientDashboard() {
                 </div>
               </div>
               <div className="space-y-3 max-h-64 overflow-y-auto">
-                {clientNotifications.slice(0, 8).map((notification) => (
+                {urgentNotifications.slice(0, 8).map((notification: any) => (
                   <div
                     key={notification.id}
                     className={`p-3 rounded-lg border transition-colors ${
@@ -476,7 +517,7 @@ export default function ClientDashboard() {
                     <span className="text-sm text-gray-600">Completed</span>
                   </div>
                   <span className="font-medium text-gray-900">
-                    {clientJobs.filter(j => j.status === 'completed').length}
+                    {stats.completed_jobs || 0}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -485,7 +526,7 @@ export default function ClientDashboard() {
                     <span className="text-sm text-gray-600">In Progress</span>
                   </div>
                   <span className="font-medium text-gray-900">
-                    {clientJobs.filter(j => j.status === 'in-progress').length}
+                    {stats.active_jobs || 0}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">

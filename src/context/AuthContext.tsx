@@ -1,85 +1,349 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, ReactNode } from 'react';
+import { initializeEcho, disconnectEcho } from '../config/echo';
+import { authApi } from '../utils/api';
+import { laravelApi } from '../utils/laravelApi';
 
+// Enhanced User Interface
 interface User {
   id: string;
   name: string;
   email: string;
-  type: 'client' | 'artisan' | 'admin';
-  avatar: string;
+  phone?: string;
   location: string;
+  avatar?: string;
+  type: 'client' | 'artisan' | 'admin';
+  isVerified: boolean;
+  isAvailable?: boolean;
+  
+  // Artisan fields
+  skills?: string[];
+  experience?: number;
+  hourlyRate?: number;
+  rating?: number;
+  reviewCount?: number;
+  bio?: string;
+  certifications?: string[];
+  portfolioImages?: string[];
+  responseTime?: string;
+  serviceRadius?: number;
+  emergencyService?: boolean;
+  insuranceVerified?: boolean;
+  
+  // Client fields
+  companyName?: string;
+  preferredPaymentMethod?: string;
+  
+  lastActive?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface AuthContextType {
+// Enhanced State Interface
+interface AuthState {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  token: string | null;
+  refreshToken: string | null;
 }
 
+// Action Types
+type AuthAction =
+  | { type: 'LOGIN_START' }
+  | { type: 'LOGIN_SUCCESS'; payload: { user: User; token: string; refreshToken: string } }
+  | { type: 'LOGIN_FAILURE'; payload: string }
+  | { type: 'LOGOUT' }
+  | { type: 'UPDATE_PROFILE'; payload: Partial<User> }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'REFRESH_TOKEN_SUCCESS'; payload: { token: string } };
+
+// Reducer
+const authReducer = (state: AuthState, action: AuthAction): AuthState => {
+  switch (action.type) {
+    case 'LOGIN_START':
+      return { ...state, isLoading: true, error: null };
+    
+    case 'LOGIN_SUCCESS':
+      return {
+        ...state,
+        isLoading: false,
+        isAuthenticated: true,
+        user: action.payload.user,
+        token: action.payload.token,
+        refreshToken: action.payload.refreshToken,
+        error: null
+      };
+    
+    case 'LOGIN_FAILURE':
+      return {
+        ...state,
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        token: null,
+        refreshToken: null,
+        error: action.payload
+      };
+    
+    case 'LOGOUT':
+      return {
+        ...state,
+        isAuthenticated: false,
+        user: null,
+        token: null,
+        refreshToken: null,
+        error: null
+      };
+    
+    case 'UPDATE_PROFILE':
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : null
+      };
+    
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    
+    case 'REFRESH_TOKEN_SUCCESS':
+      return { ...state, token: action.payload.token };
+    
+    default:
+      return state;
+  }
+};
+
+// Initial State
+const initialState: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null,
+  token: localStorage.getItem('token'),
+  refreshToken: localStorage.getItem('refreshToken')
+};
+
+// Auth Response Interface
+interface AuthResponse {
+  success: boolean;
+  data: {
+    user: User;
+    token: string;
+    refreshToken: string;
+  };
+  message?: string;
+}
+
+// Context Interface
+interface AuthContextType extends AuthState {
+  login: (email: string, password: string) => Promise<AuthResponse>;
+  logout: () => void;
+  register: (userData: RegisterData) => Promise<AuthResponse>;
+  updateProfile: (data: Partial<User>) => Promise<{ success: boolean; message?: string }>;
+  refreshAuthToken: () => Promise<boolean>;
+  clearError: () => void;
+}
+
+interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  location: string;
+  type: 'client' | 'artisan';
+}
+
+// Create Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers = [
-  {
-    id: 'cli-1',
-    name: 'Sarah Wilson',
-    email: 'client@demo.com',
-    type: 'client' as const,
-    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b47c?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    location: 'Warri, Nigeria'
-  },
-  {
-    id: 'art-1',
-    name: 'John Carpenter',
-    email: 'artisan@demo.com',
-    type: 'artisan' as const,
-    avatar: 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    location: 'Warri, Nigeria'
-  },
-  {
-    id: 'adm-1',
-    name: 'Admin User',
-    email: 'admin@demo.com',
-    type: 'admin' as const,
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    location: 'Lagos, Nigeria'
-  }
-];
+// Provider Component
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(authReducer, initialState);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  // Initialize auth state on mount
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        laravelApi.setToken(token);
+        // Initialize Echo with token for real-time features
+        initializeEcho(token);
+        // Optionally fetch and update user profile
+        try {
+          const response = await authApi.getProfile();
+          if (response.data) {
+            dispatch({
+              type: 'LOGIN_SUCCESS',
+              payload: {
+                user: response.data,
+                token,
+                refreshToken: localStorage.getItem('refreshToken') || ''
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Failed to fetch profile:', error);
+        }
+      }
+    };
 
-  const login = async (email: string, _password: string): Promise<boolean> => {
-    // Mock authentication - accept any password for demo users
-    const foundUser = mockUsers.find(u => u.email === email);
-    
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('auth_user', JSON.stringify(foundUser));
-      return true;
-    }
-    
-    return false;
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('auth_user');
-  };
-
-  // Check for stored user on mount
-  React.useEffect(() => {
-    const storedUser = localStorage.getItem('auth_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    initializeAuth();
   }, []);
 
-  const value = {
-    user,
+  // Auto-refresh token
+  useEffect(() => {
+    if (state.token) {
+      const interval = setInterval(() => {
+        refreshAuthToken();
+      }, 14 * 60 * 1000); // Refresh every 14 minutes
+
+      return () => clearInterval(interval);
+    }
+  }, [state.token]);
+
+  const login = async (email: string, password: string) => {
+    dispatch({ type: 'LOGIN_START' });
+
+    try {
+      const response = await authApi.login({ email, password });
+      console.log('🔍 Full login response:', response);
+      console.log('🔍 Response.data:', response.data);
+      
+      // Laravel returns: { status, message, data: { user, token, refreshToken } }
+      // laravelApi.post returns response.data, so we access data.data for the actual payload
+      const { user, token, refreshToken } = response.data;
+      
+      console.log('🔍 Extracted user:', user);
+      console.log('🔍 Extracted token:', token);
+      console.log('🔍 Extracted refreshToken:', refreshToken);
+      
+      if (!user || !token) {
+        throw new Error('Invalid response: missing user or token');
+      }
+      
+      laravelApi.setToken(token);
+      localStorage.setItem('refreshToken', refreshToken || '');
+      
+      // Initialize Echo with new token for real-time features
+      initializeEcho(token);
+      
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: { user, token, refreshToken: refreshToken || '' }
+      });
+
+      return { success: true, data: { user, token, refreshToken: refreshToken || '' }, message: response.message };
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      const message = error.message || 'Login failed';
+      dispatch({
+        type: 'LOGIN_FAILURE',
+        payload: message
+      });
+      return { success: false, data: {} as any, message };
+    }
+  };
+
+  const register = async (userData: RegisterData) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    try {
+      const registerData = {
+        ...userData,
+        password_confirmation: userData.password
+      };
+      const response = await authApi.register(registerData);
+      // Laravel returns: { status, message, data: { user, token, refreshToken } }
+      // laravelApi.post returns response.data, so we access data.data for the actual payload
+      const { user, token, refreshToken } = response.data;
+      
+      laravelApi.setToken(token);
+      localStorage.setItem('refreshToken', refreshToken || '');
+      
+      // Initialize Echo with new token for real-time features
+      initializeEcho(token);
+      
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: { user, token, refreshToken: refreshToken || '' }
+      });
+
+      return { success: true, data: { user, token, refreshToken: refreshToken || '' }, message: response.message };
+    } catch (error: any) {
+      const message = error.message || 'Registration failed';
+      dispatch({
+        type: 'LOGIN_FAILURE',
+        payload: message
+      });
+      return { success: false, data: {} as any, message };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    
+    laravelApi.setToken(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    
+    // Disconnect Echo when logging out
+    disconnectEcho();
+    
+    dispatch({ type: 'LOGOUT' });
+  };
+
+  const updateProfile = async (data: Partial<User>) => {
+    try {
+      const response = await laravelApi.put('/users/profile', data);
+      
+      if (response.data) {
+        dispatch({
+          type: 'UPDATE_PROFILE',
+          payload: response.data
+        });
+      }
+
+      return { success: true, data: response.data, message: response.message };
+    } catch (error: any) {
+      return { success: false, data: {} as any, message: error.message };
+    }
+  };
+
+  const refreshAuthToken = async (): Promise<boolean> => {
+    // Laravel Sanctum tokens don't expire by default
+    // This function can be used to verify token validity
+    try {
+      const response = await authApi.getProfile();
+      if (response.data) {
+        return true;
+      }
+      return false;
+    } catch (error) {
+      logout();
+      return false;
+    }
+  };
+
+  const clearError = () => {
+    dispatch({ type: 'CLEAR_ERROR' });
+  };
+
+  const value: AuthContextType = {
+    ...state,
     login,
     logout,
-    isAuthenticated: !!user
+    register,
+    updateProfile,
+    refreshAuthToken,
+    clearError
   };
 
   return (
@@ -87,12 +351,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+// Custom Hook
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
+
+export default AuthContext;

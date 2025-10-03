@@ -1,15 +1,68 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { HomeIcon, BriefcaseIcon, MessageSquareIcon, UserIcon, CreditCardIcon, BellIcon } from 'lucide-react';
 import Button from '../../components/Button';
-import { mockArtisans, mockJobs, getJobsByArtisan, getArtisanStats, getClientById } from '../../data/mockData';
-export default function ArtisanDashboard() {
-  // Using first artisan as current user for demo
-  const currentArtisan = mockArtisans[0];
-  const artisanJobs = getJobsByArtisan(currentArtisan.id);
-  const stats = getArtisanStats(currentArtisan.id);
-  const openJobs = mockJobs.filter(job => job.status === 'open' && job.artisanId !== currentArtisan.id).slice(0, 2);
-  const ongoingJobs = artisanJobs.filter(job => job.status === 'in-progress');
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { profileApi } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
+
+export default function ArtisanDashboardEnhanced() {
+  const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [availableJobs, setAvailableJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch dashboard data from API
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+        const dashResponse = await profileApi.getArtisanDashboard();
+        
+        setDashboardData(dashResponse.data);
+        setAvailableJobs(dashResponse.data.available_jobs || []);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load dashboard data');
+        console.error('Dashboard error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.type === 'artisan') {
+      fetchDashboard();
+    }
+  }, [user]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error || !dashboardData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h2>
+          <p className="text-gray-600 mb-4">{error || 'Unable to load dashboard data'}</p>
+          <Button onClick={() => window.location.reload()}>Reload Page</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract data from API response
+  const currentArtisan = dashboardData.user;
+  const artisanJobs = dashboardData.active_jobs || [];
+  const stats = dashboardData.stats || {};
+  const ongoingJobs = artisanJobs.filter((job: any) => job.status === 'in-progress');
+  const openJobs = availableJobs.slice(0, 2);
 
   return <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -44,6 +97,7 @@ export default function ArtisanDashboard() {
           </nav>
         </div>
       </div>
+
       {/* Mobile header */}
       <div className="md:hidden bg-white shadow-sm w-full fixed top-0 z-10">
         <div className="flex items-center justify-between h-16 px-4">
@@ -59,10 +113,10 @@ export default function ArtisanDashboard() {
           </div>
         </div>
       </div>
+
       {/* Main content */}
       <div className="md:pl-64 flex flex-col flex-1">
-        <div className="sticky top-0 z-10 md:hidden h-16"></div>{' '}
-        {/* Spacer for mobile header */}
+        <div className="sticky top-0 z-10 md:hidden h-16"></div>
         <main className="flex-1">
           <div className="py-6">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
@@ -78,6 +132,7 @@ export default function ArtisanDashboard() {
                   <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
                 </div>
               </div>
+
               {/* Status Card */}
               <div className="bg-white shadow rounded-lg p-6 mb-6">
                 <div className="flex items-center">
@@ -98,201 +153,158 @@ export default function ArtisanDashboard() {
                     </div>
                   </div>
                   <div className="ml-auto">
-                    <div className="flex items-center">
-                      <span className="text-sm text-gray-500 mr-2">
-                        {currentArtisan.isAvailable ? 'Available for jobs' : 'Not available'}
-                      </span>
-                      <div className="relative inline-block w-10 mr-2 align-middle select-none">
-                        <input type="checkbox" name="toggle" id="toggle" defaultChecked={currentArtisan.isAvailable} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer" />
-                        <label htmlFor="toggle" className="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">Rating</div>
+                      <div className="flex items-center">
+                        <span className="text-lg font-semibold text-gray-900">{currentArtisan.rating}</span>
+                        <span className="text-sm text-gray-500 ml-1">({currentArtisan.reviewCount} reviews)</span>
                       </div>
                     </div>
                   </div>
                 </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{stats.completedJobs}</div>
+                    <div className="text-sm text-gray-500">Completed Jobs</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">{stats.inProgressJobs}</div>
+                    <div className="text-sm text-gray-500">Active Jobs</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">₦{stats.totalEarnings.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">Total Earnings</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">₦{currentArtisan.hourlyRate.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">Hourly Rate</div>
+                  </div>
+                </div>
               </div>
+
               {/* Job Offers */}
               <div className="mb-8">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
-                  Job Offers
+                  Available Job Offers
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white shadow rounded-lg overflow-hidden">
-                    <div className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-900">
-                            Kitchen Cabinet Installation
-                          </h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            Posted 2 hours ago
-                          </p>
-                        </div>
-                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                          New
-                        </span>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-600">
-                          Need help installing custom kitchen cabinets in a new
-                          home.
-                        </p>
-                      </div>
-                      <div className="mt-4 flex items-center">
-                        <div className="flex-shrink-0">
-                          <img className="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Client" />
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-gray-900">
-                            Sarah Johnson
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Warri, Nigeria
-                          </p>
-                        </div>
-                        <div className="ml-auto">
-                          <p className="text-sm font-medium text-gray-900">
-                            ₦25,000
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex space-x-3">
-                        <Button variant="primary" size="sm">
-                          View Details
-                        </Button>
-                        <Button variant="secondary" size="sm">
-                          Respond
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-white shadow rounded-lg overflow-hidden">
-                    <div className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-900">
-                            Furniture Repair
-                          </h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            Posted 5 hours ago
-                          </p>
-                        </div>
-                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                          New
-                        </span>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-600">
-                          Need to repair a broken dining table leg. Wood is
-                          mahogany.
-                        </p>
-                      </div>
-                      <div className="mt-4 flex items-center">
-                        <div className="flex-shrink-0">
-                          <img className="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Client" />
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-gray-900">
-                            Michael Adams
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Warri, Nigeria
-                          </p>
-                        </div>
-                        <div className="ml-auto">
-                          <p className="text-sm font-medium text-gray-900">
-                            ₦8,000
-                          </p>
+                  {openJobs.map((job: any) => {
+                    const client = job.client || { name: 'Unknown Client', location: 'N/A' };
+                    return (
+                      <div key={job.id} className="bg-white shadow rounded-lg overflow-hidden">
+                        <div className="p-6">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="text-lg font-medium text-gray-900">
+                                {job.title}
+                              </h3>
+                              <p className="text-sm text-gray-500 mt-1">
+                                Posted {new Date(job.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                              New
+                            </span>
+                          </div>
+                          <div className="mt-4">
+                            <p className="text-sm text-gray-600">
+                              {job.description.substring(0, 100)}...
+                            </p>
+                          </div>
+                          <div className="mt-4 flex items-center">
+                            <div className="flex-shrink-0">
+                              <img className="h-8 w-8 rounded-full" src={client?.avatar} alt="Client" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-gray-900">
+                                {client?.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {job.location}
+                              </p>
+                            </div>
+                            <div className="ml-auto">
+                              <p className="text-sm font-medium text-gray-900">
+                                ₦{job.budget.toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex space-x-3">
+                            <Link to={`/job/${job.id}`}>
+                              <Button variant="primary" size="sm">
+                                View Details
+                              </Button>
+                            </Link>
+                            <Button variant="secondary" size="sm">
+                              Apply Now
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-4 flex space-x-3">
-                        <Button variant="primary" size="sm">
-                          View Details
-                        </Button>
-                        <Button variant="secondary" size="sm">
-                          Respond
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
+
               {/* Ongoing Jobs */}
               <div>
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
-                  Ongoing Jobs
+                  Your Active Jobs
                 </h2>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
                   <ul className="divide-y divide-gray-200">
-                    <li>
-                      <div className="px-6 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-base font-medium text-gray-900">
-                              Office Desk Assembly
-                            </h3>
-                            <p className="text-sm text-gray-500 mt-1">
-                              Started May 10, 2023
-                            </p>
+                    {ongoingJobs.map((job: any) => {
+                      const client = job.client || { name: 'Unknown Client', phone: 'N/A' };
+                      return (
+                        <li key={job.id}>
+                          <div className="px-6 py-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-base font-medium text-gray-900">
+                                  {job.title}
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                  Started {new Date(job.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
+                                In Progress
+                              </span>
+                            </div>
+                            <div className="mt-2 flex items-center">
+                              <div className="flex-shrink-0">
+                                <img className="h-8 w-8 rounded-full" src={client?.avatar} alt="Client" />
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {client?.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {job.location}
+                                </p>
+                              </div>
+                              <div className="ml-auto">
+                                <Link to={`/job/${job.id}/track`}>
+                                  <Button variant="primary" size="sm">
+                                    Track Progress
+                                  </Button>
+                                </Link>
+                              </div>
+                            </div>
                           </div>
-                          <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
-                            In Progress
-                          </span>
+                        </li>
+                      );
+                    })}
+                    {ongoingJobs.length === 0 && (
+                      <li>
+                        <div className="px-6 py-8 text-center">
+                          <p className="text-gray-500">No active jobs at the moment</p>
+                          <Link to="/search" className="mt-2 inline-block text-blue-600 hover:text-blue-500">
+                            Browse available jobs
+                          </Link>
                         </div>
-                        <div className="mt-2 flex items-center">
-                          <div className="flex-shrink-0">
-                            <img className="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Client" />
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">
-                              Emma Wilson
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Warri, Nigeria
-                            </p>
-                          </div>
-                          <div className="ml-auto">
-                            <Button variant="primary" size="sm">
-                              Update Status
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                    <li>
-                      <div className="px-6 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-base font-medium text-gray-900">
-                              Bookshelf Installation
-                            </h3>
-                            <p className="text-sm text-gray-500 mt-1">
-                              Started May 8, 2023
-                            </p>
-                          </div>
-                          <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
-                            In Progress
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-center">
-                          <div className="flex-shrink-0">
-                            <img className="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1519244703995-f4e0f30006d5?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Client" />
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">
-                              David Chen
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Warri, Nigeria
-                            </p>
-                          </div>
-                          <div className="ml-auto">
-                            <Button variant="primary" size="sm">
-                              Update Status
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
+                      </li>
+                    )}
                   </ul>
                 </div>
               </div>

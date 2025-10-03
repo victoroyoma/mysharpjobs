@@ -266,13 +266,13 @@ const JobTrackingCard: React.FC<JobTrackingProps> = ({ job, artisan }) => {
     const [searchTerm, setSearchTerm] = useState('');
   
     // Filter and sort jobs
-    let filteredJobs = jobs.filter(job => {
+    const filteredJobs = jobs.filter(job => {
       if (filterStatus !== 'all' && job.status !== filterStatus) return false;
       if (searchTerm && !job.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
       return true;
     });
   
-    let sortedJobs = [...filteredJobs];
+    const sortedJobs = [...filteredJobs];
     if (sortBy === 'recent') {
       sortedJobs.sort((a: Job, b: Job) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sortBy === 'budget') {
