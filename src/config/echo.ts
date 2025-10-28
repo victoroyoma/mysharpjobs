@@ -18,18 +18,27 @@ declare global {
 
 window.Pusher = Pusher;
 
+// Resolve environment-driven WebSocket settings with safe fallbacks
+const wsKey = import.meta.env.VITE_WS_KEY || 'mysharpjob-key';
+const wsHost = import.meta.env.VITE_WS_HOST || window.location.hostname || '127.0.0.1';
+const wsPort = Number(import.meta.env.VITE_WS_PORT) || 6001;
+const wsCluster = import.meta.env.VITE_WS_CLUSTER || 'mt1';
+const forceTLS = `${import.meta.env.VITE_WS_FORCE_TLS}`.toLowerCase() === 'true';
+const baseUrl = import.meta.env.VITE_BASE_URL || 'http://localhost:8000';
+
 // Laravel Echo Configuration
 const echoConfig = {
   broadcaster: 'pusher' as const,
-  key: 'mysharpjob-key',
-  wsHost: '127.0.0.1',
-  wsPort: 6001,
-  wssPort: 6001,
-  forceTLS: false,
-  encrypted: false,
+  key: wsKey,
+  cluster: wsCluster,
+  wsHost,
+  wsPort,
+  wssPort: wsPort,
+  forceTLS,
+  encrypted: forceTLS,
   disableStats: true,
   enabledTransports: ['ws', 'wss'] as any,
-  authEndpoint: 'http://localhost:8000/broadcasting/auth',
+  authEndpoint: `${baseUrl}/broadcasting/auth`,
 };
 
 let echoInstance: Echo<'pusher'> | null = null;

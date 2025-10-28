@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer, ReactNode } fr
 import { initializeEcho, disconnectEcho } from '../config/echo';
 import { authApi } from '../utils/api';
 import { laravelApi } from '../utils/laravelApi';
+import { transformUser } from '../utils/transformers';
 
 // Enhanced User Interface
 interface User {
@@ -14,6 +15,11 @@ interface User {
   type: 'client' | 'artisan' | 'admin';
   isVerified: boolean;
   isAvailable?: boolean;
+  
+  // Profile completion fields
+  profileCompleted?: boolean;
+  profileCompletionPercentage?: number;
+  profileCompletedAt?: string;
   
   // Artisan fields
   skills?: string[];
@@ -144,6 +150,7 @@ interface AuthContextType extends AuthState {
   logout: () => void;
   register: (userData: RegisterData) => Promise<AuthResponse>;
   updateProfile: (data: Partial<User>) => Promise<{ success: boolean; message?: string }>;
+  updateProfileLocally: (userData: User) => void;
   refreshAuthToken: () => Promise<boolean>;
   clearError: () => void;
 }
@@ -176,10 +183,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const response = await authApi.getProfile();
           if (response.data) {
+            // Transform user object from snake_case to camelCase
+            const user = transformUser(response.data);
             dispatch({
               type: 'LOGIN_SUCCESS',
               payload: {
-                user: response.data,
+                user,
                 token,
                 refreshToken: localStorage.getItem('refreshToken') || ''
               }
@@ -215,7 +224,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Laravel returns: { status, message, data: { user, token, refreshToken } }
       // laravelApi.post returns response.data, so we access data.data for the actual payload
-      const { user, token, refreshToken } = response.data;
+      let { user, token, refreshToken } = response.data;
+      
+      // Transform user object from snake_case to camelCase
+      user = transformUser(user);
       
       console.log('🔍 Extracted user:', user);
       console.log('🔍 Extracted token:', token);
@@ -259,7 +271,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await authApi.register(registerData);
       // Laravel returns: { status, message, data: { user, token, refreshToken } }
       // laravelApi.post returns response.data, so we access data.data for the actual payload
-      const { user, token, refreshToken } = response.data;
+      let { user, token, refreshToken } = response.data;
+      
+      // Transform user object from snake_case to camelCase
+      user = transformUser(user);
       
       laravelApi.setToken(token);
       localStorage.setItem('refreshToken', refreshToken || '');
@@ -302,12 +317,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateProfile = async (data: Partial<User>) => {
     try {
-      const response = await laravelApi.put('/users/profile', data);
+      const response = await laravelApi.put('/profiles/me', data);
       
       if (response.data) {
+        // Transform user object from snake_case to camelCase
+        const user = transformUser(response.data);
         dispatch({
           type: 'UPDATE_PROFILE',
-          payload: response.data
+          payload: user
         });
       }
 
@@ -315,6 +332,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error: any) {
       return { success: false, data: {} as any, message: error.message };
     }
+  };
+
+  // Update user profile locally without API call (used after profile setup)
+  const updateProfileLocally = (userData: User) => {
+    dispatch({
+      type: 'UPDATE_PROFILE',
+      payload: userData
+    });
   };
 
   const refreshAuthToken = async (): Promise<boolean> => {
@@ -342,6 +367,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     register,
     updateProfile,
+    updateProfileLocally,
     refreshAuthToken,
     clearError
   };

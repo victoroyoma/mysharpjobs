@@ -8,9 +8,11 @@ use App\Http\Controllers\JobController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileSetupController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\NotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,9 +43,30 @@ Route::prefix('auth')->group(function () {
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 });
 
-// Public job routes
+// Public & Protected Job Routes
 Route::prefix('jobs')->group(function () {
+    // Public routes
     Route::get('/', [JobController::class, 'index']);
+    
+    // Authenticated routes
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/my-jobs', [JobController::class, 'myJobs']);
+        Route::get('/my-applications', [JobController::class, 'myApplications']);
+        Route::post('/', [JobController::class, 'store']);
+        Route::put('/{id}', [JobController::class, 'update']);
+        Route::delete('/{id}', [JobController::class, 'destroy']);
+        Route::post('/{id}/apply', [JobController::class, 'apply']);
+        Route::post('/{id}/accept/{artisanId}', [JobController::class, 'acceptApplication']);
+        Route::post('/{id}/start', [JobController::class, 'start']);
+        Route::post('/{id}/complete', [JobController::class, 'complete']);
+        Route::post('/{id}/cancel', [JobController::class, 'cancel']);
+        Route::post('/{id}/review', [JobController::class, 'addReview']);
+        Route::post('/{id}/milestone', [JobController::class, 'addMilestone']);
+        Route::put('/{id}/milestone/{milestoneId}', [JobController::class, 'updateMilestone']);
+        Route::post('/{id}/progress', [JobController::class, 'addProgressUpdate']);
+    });
+
+    // This MUST be last
     Route::get('/{id}', [JobController::class, 'show']);
 });
 
@@ -84,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('profiles')->group(function () {
         Route::get('/me', [ProfileController::class, 'getMyProfile']);
         Route::put('/me', [ProfileController::class, 'update']);
+        Route::put('/availability', [ProfileController::class, 'updateAvailability']);
         Route::post('/avatar', [ProfileController::class, 'uploadProfilePicture']);
         Route::post('/portfolio', [ProfileController::class, 'uploadPortfolioImages']);
         Route::delete('/portfolio/{index}', [ProfileController::class, 'deletePortfolioImage']);
@@ -95,6 +119,10 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Job routes
     Route::prefix('jobs')->group(function () {
+        // Specific routes MUST come before wildcard routes
+        Route::get('/my-jobs', [JobController::class, 'myJobs']);
+        Route::get('/my-applications', [JobController::class, 'myApplications']);
+        
         Route::post('/', [JobController::class, 'store']);
         Route::put('/{id}', [JobController::class, 'update']);
         Route::delete('/{id}', [JobController::class, 'destroy']);
@@ -107,8 +135,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/milestone', [JobController::class, 'addMilestone']);
         Route::put('/{id}/milestone/{milestoneId}', [JobController::class, 'updateMilestone']);
         Route::post('/{id}/progress', [JobController::class, 'addProgressUpdate']);
-        Route::get('/my-jobs', [JobController::class, 'myJobs']);
-        Route::get('/my-applications', [JobController::class, 'myApplications']);
     });
     
     // Message routes
@@ -134,11 +160,36 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/config', [PaymentController::class, 'getConfig']);
     });
     
+    // Notification routes
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread-count', [NotificationController::class, 'getUnreadCount']);
+        Route::get('/{id}', [NotificationController::class, 'show']);
+        Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::patch('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::delete('/{id}', [NotificationController::class, 'destroy']);
+        Route::delete('/read/all', [NotificationController::class, 'deleteRead']);
+        Route::delete('/all/delete', [NotificationController::class, 'deleteAll']);
+        Route::post('/test', [NotificationController::class, 'createTest']);
+    });
+    
+    // Profile Setup routes
+    Route::prefix('profile')->group(function () {
+        Route::post('/setup/artisan', [ProfileSetupController::class, 'completeArtisanProfile']);
+        Route::post('/setup/client', [ProfileSetupController::class, 'completeClientProfile']);
+        Route::get('/completion-status', [ProfileSetupController::class, 'getCompletionStatus']);
+        Route::patch('/skip-for-now', [ProfileSetupController::class, 'skipSetup']);
+        Route::patch('/update-completion', [ProfileSetupController::class, 'updateCompletionPercentage']);
+    });
+    
     // Admin routes
     Route::prefix('admin')->middleware('admin')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'getDashboardStats']);
+        Route::get('/health', [AdminController::class, 'getSystemHealth']);
         Route::get('/users', [AdminController::class, 'getAllUsers']);
+        Route::get('/users/{id}', [AdminController::class, 'getUserDetails']);
         Route::get('/jobs', [AdminController::class, 'getAllJobs']);
+        Route::get('/activities', [AdminController::class, 'getRecentActivities']);
         Route::get('/disputes', [AdminController::class, 'getDisputes']);
         Route::post('/disputes/{id}/resolve', [AdminController::class, 'resolveDispute']);
         Route::put('/users/{id}/suspend', [AdminController::class, 'suspendUser']);

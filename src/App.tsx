@@ -23,12 +23,22 @@ const ClientDashboard = lazy(() => import('./pages/Dashboard/ClientDashboard'));
 const AdminDashboardProduction = lazy(() => import('./pages/Dashboard/AdminDashboardProduction'));
 
 // Profile components
-const ArtisanProfile = lazy(() => import('./pages/Profile/ArtisanProfile'));
-const ClientProfile = lazy(() => import('./pages/Profile/ClientProfile'));
+const ArtisanProfile = lazy(() => import('./pages/Profile/EditableArtisanProfile'));
+const ClientProfile = lazy(() => import('./pages/Profile/EditableClientProfile'));
 
 // Job components
 const PostJob = lazy(() => import('./pages/Job/PostJob'));
 const JobDetails = lazy(() => import('./pages/Job/JobDetails'));
+const ArtisanJobManagement = lazy(() => import('./pages/Job/ArtisanJobManagement'));
+const ArtisanPayments = lazy(() => import('./pages/Job/ArtisanPayments'));
+
+// Search components
+const SearchPage = lazy(() => import('./pages/Search/SearchPage'));
+const MapSearch = lazy(() => import('./pages/Search/MapSearch'));
+
+// Profile Setup components
+const ArtisanProfileSetup = lazy(() => import('./pages/ProfileSetup/ArtisanProfileSetup'));
+const ClientProfileSetup = lazy(() => import('./pages/ProfileSetup/ClientProfileSetup'));
 
 // Enhanced loading component
 const EnhancedLoadingSpinner: React.FC<{ message?: string }> = ({ message = "Loading..." }) => (
@@ -115,11 +125,39 @@ function App() {
                     <Route path="/recover-password" element={<PasswordRecovery />} />
                     <Route path="/verify" element={<Verification />} />
                     
+                    {/* Profile Setup Routes (requires authentication but not profile completion) */}
+                    <Route path="/profile-setup/artisan" element={
+                      <ProtectedRoute requiredRole="artisan">
+                        <ArtisanProfileSetup />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/profile-setup/client" element={
+                      <ProtectedRoute requiredRole="client">
+                        <ClientProfileSetup />
+                      </ProtectedRoute>
+                    } />
+                    
                     {/* Artisan Routes */}
                     <Route path="/artisan/dashboard" element={
                       <ProtectedRoute requiredRole="artisan">
                         <Suspense fallback={<EnhancedLoadingSpinner message="Loading artisan dashboard..." />}>
                           <ArtisanDashboard />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
+                    <Route path="/artisan/jobs" element={
+                      <ProtectedRoute requiredRole="artisan">
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading jobs..." />}>
+                          <ArtisanJobManagement />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
+                    <Route path="/artisan/payments" element={
+                      <ProtectedRoute requiredRole="artisan">
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading payments..." />}>
+                          <ArtisanPayments />
                         </Suspense>
                       </ProtectedRoute>
                     } />
@@ -179,6 +217,30 @@ function App() {
                     } />
                     
                     {/* Shared Routes */}
+                    <Route path="/search" element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading search..." />}>
+                          <SearchPage />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
+                    <Route path="/search/map" element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading map search..." />}>
+                          <MapSearch />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
+                    <Route path="/post-job" element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading job form..." />}>
+                          <PostJob />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
                     <Route path="/job/:jobId" element={
                       <ProtectedRoute>
                         <Suspense fallback={<EnhancedLoadingSpinner message="Loading job details..." />}>

@@ -49,7 +49,8 @@ export default function PostJob() {
 
       console.log('Job created:', response.data);
       alert('Job posted successfully!');
-      navigate(`/jobs/${response.data.id}`);
+      // Redirect to client dashboard where they can see their posted jobs
+      navigate('/client/dashboard');
     } catch (error: any) {
       console.error('Failed to create job:', error);
       alert(error.message || 'Failed to post job. Please try again.');

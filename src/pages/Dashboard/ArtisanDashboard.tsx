@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, BriefcaseIcon, MessageSquareIcon, UserIcon, CreditCardIcon, BellIcon } from 'lucide-react';
 import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -8,20 +8,24 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function ArtisanDashboardEnhanced() {
   const { user } = useAuth();
+  const location = useLocation();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [availableJobs, setAvailableJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Fetch dashboard data from API
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
         setLoading(true);
+        console.log('🔄 Fetching dashboard data...');
         const dashResponse = await profileApi.getArtisanDashboard();
         
         setDashboardData(dashResponse.data);
         setAvailableJobs(dashResponse.data.available_jobs || []);
+        console.log('✅ Dashboard data loaded');
       } catch (err: any) {
         setError(err.message || 'Failed to load dashboard data');
         console.error('Dashboard error:', err);
@@ -33,7 +37,15 @@ export default function ArtisanDashboardEnhanced() {
     if (user?.type === 'artisan') {
       fetchDashboard();
     }
-  }, [user]);
+  }, [user, refreshTrigger]);
+  
+  // Refresh dashboard when navigating back from profile page
+  useEffect(() => {
+    if (location.state?.from === 'profile' || location.key) {
+      console.log('📍 Location changed, triggering dashboard refresh');
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [location]);
 
   // Show loading state
   if (loading) {
@@ -57,10 +69,54 @@ export default function ArtisanDashboardEnhanced() {
     );
   }
 
-  // Extract data from API response
-  const currentArtisan = dashboardData.user;
-  const artisanJobs = dashboardData.active_jobs || [];
-  const stats = dashboardData.stats || {};
+  // Extract data from API response with safe defaults
+  const parseSkills = (skills: any): string[] => {
+    if (!skills) return [];
+    if (Array.isArray(skills)) {
+      // Check if it's an array of objects with name/level or just strings
+      return skills.map((skill: any) => {
+        if (typeof skill === 'object' && skill !== null && skill.name) {
+          return skill.name; // Extract name from {name: "Plumbing", level: "Expert"}
+        }
+        return String(skill); // Return as string if it's already a string
+      });
+    }
+    if (typeof skills === 'string') {
+      try {
+        const parsed = JSON.parse(skills);
+        if (Array.isArray(parsed)) {
+          return parsed.map((skill: any) => {
+            if (typeof skill === 'object' && skill !== null && skill.name) {
+              return skill.name;
+            }
+            return String(skill);
+          });
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const currentArtisan = {
+    name: dashboardData.user?.name || 'Artisan',
+    avatar: dashboardData.user?.avatar || 'https://ui-avatars.com/api/?name=Artisan&background=3b82f6&color=fff',
+    isVerified: dashboardData.user?.is_verified || false,
+    skills: parseSkills(dashboardData.user?.skills),
+    experience: dashboardData.user?.experience || 0,
+    rating: dashboardData.user?.rating || 0,
+    reviewCount: dashboardData.user?.review_count || 0,
+    hourlyRate: dashboardData.user?.hourly_rate || 0,
+  };
+  
+  const artisanJobs = dashboardData.current_jobs || [];
+  const stats = {
+    completedJobs: dashboardData.stats?.completed_jobs || 0,
+    inProgressJobs: dashboardData.stats?.active_jobs || 0,
+    totalEarnings: dashboardData.stats?.total_earnings || 0,
+  };
   const ongoingJobs = artisanJobs.filter((job: any) => job.status === 'in-progress');
   const openJobs = availableJobs.slice(0, 2);
 
@@ -148,7 +204,7 @@ export default function ArtisanDashboardEnhanced() {
                         {currentArtisan.isVerified ? 'Verified' : 'Pending'}
                       </span>
                       <span className="ml-2 text-sm text-gray-500">
-                        {currentArtisan.skills[0]} • {currentArtisan.experience} years experience
+                        {currentArtisan.skills.length > 0 ? currentArtisan.skills[0] : 'No skills'} • {currentArtisan.experience} years experience
                       </span>
                     </div>
                   </div>
@@ -172,11 +228,11 @@ export default function ArtisanDashboardEnhanced() {
                     <div className="text-sm text-gray-500">Active Jobs</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">₦{stats.totalEarnings.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-green-600">₦{(stats.totalEarnings || 0).toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Total Earnings</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">₦{currentArtisan.hourlyRate.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-purple-600">₦{(currentArtisan.hourlyRate || 0).toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Hourly Rate</div>
                   </div>
                 </div>

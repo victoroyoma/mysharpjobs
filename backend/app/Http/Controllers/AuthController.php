@@ -29,10 +29,10 @@ class AuthController extends Controller
             'type' => 'required|in:artisan,client',
             'location' => 'required|string|min:2|max:200',
             'phone' => 'nullable|string',
-            // Artisan specific
+            // Artisan specific (basic info only - detailed profile completed later)
             'skills' => 'required_if:type,artisan|array|min:1',
             'experience' => 'required_if:type,artisan|numeric|min:0',
-            'hourlyRate' => 'required_if:type,artisan|numeric|min:0',
+            'hourlyRate' => 'nullable|numeric|min:0', // Optional during registration, required in profile setup
             'bio' => 'nullable|string|max:1000',
             'certifications' => 'nullable|array',
             // Client specific
@@ -67,7 +67,7 @@ class AuthController extends Controller
             if ($request->type === 'artisan') {
                 $userData['skills'] = $request->skills;
                 $userData['experience'] = $request->experience;
-                $userData['hourly_rate'] = $request->hourlyRate;
+                $userData['hourly_rate'] = $request->hourlyRate ?? 0; // Default to 0, will be set in profile setup
                 $userData['bio'] = $request->bio ?? '';
                 $userData['certifications'] = $request->certifications ?? [];
                 $userData['is_available'] = true;

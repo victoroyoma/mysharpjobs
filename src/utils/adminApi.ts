@@ -95,6 +95,12 @@ export const adminApi = {
     laravelApi.get<{ data: AdminJob[]; pagination: any }>('/admin/jobs', params),
 
   /**
+   * Get system health
+   */
+  getSystemHealth: () => 
+    laravelApi.get('/admin/health'),
+
+  /**
    * Get pending verifications
    */
   getPendingVerifications: () => 
@@ -155,4 +161,18 @@ export const adminApi = {
     end_date?: string;
   }) => 
     laravelApi.get<Analytics>('/admin/analytics', params),
+
+  /**
+   * Get detailed user information
+   */
+  getUserDetails: (userId: string) => 
+    laravelApi.get(`/admin/users/${userId}`),
+
+  /**
+   * Get recent activities across the platform
+   */
+  getRecentActivities: (params?: {
+    limit?: number;
+  }) => 
+    laravelApi.get('/admin/activities', params),
 };

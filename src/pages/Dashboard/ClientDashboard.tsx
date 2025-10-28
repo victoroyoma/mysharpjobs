@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   BriefcaseIcon, 
   MessageSquareIcon, 
@@ -32,6 +32,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function ClientDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -298,9 +299,12 @@ export default function ClientDashboard() {
                 <h2 className="text-lg font-semibold text-gray-900">Active Jobs</h2>
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-500">{clientJobs.length} total jobs</span>
-                  <Link to="/jobs" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                  <button 
+                    onClick={() => navigate('/search')}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
                     View All
-                  </Link>
+                  </button>
                 </div>
               </div>
               <div className="space-y-4">
@@ -341,11 +345,18 @@ export default function ClientDashboard() {
                            'Open'}
                         </span>
                         <div className="flex space-x-2">
-                        <Button size="sm" variant="secondary">
+                        <Button 
+                          size="sm" 
+                          variant="secondary"
+                          onClick={() => navigate('/messages')}
+                        >
                           <MessageCircleIcon className="w-4 h-4 mr-1" />
                           Chat
                         </Button>
-                        <Button size="sm">
+                        <Button 
+                          size="sm"
+                          onClick={() => navigate(`/job/${job.id}`)}
+                        >
                           <ExternalLinkIcon className="w-4 h-4 mr-1" />
                           View
                         </Button>
@@ -559,7 +570,10 @@ export default function ClientDashboard() {
                   <span className="text-sm text-gray-600 ml-1">5.0</span>
                 </div>
                 <div className="flex space-x-2 mt-4">
-                  <Button variant="secondary">
+                  <Button 
+                    variant="secondary"
+                    onClick={() => navigate('/client/profile')}
+                  >
                     Edit Profile
                   </Button>
                   <Button variant="secondary" size="sm">

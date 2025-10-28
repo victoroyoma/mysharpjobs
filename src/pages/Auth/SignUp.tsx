@@ -86,13 +86,14 @@ export default function SignUp() {
         // Get user type from the registration response
         const registeredUserType = result.data.user.type;
         
-        // Redirect based on user type
+        // Redirect to profile setup for artisans and clients
+        // Admins go directly to dashboard as they don't need profile completion
         switch (registeredUserType) {
           case 'artisan':
-            navigate('/artisan/dashboard');
+            navigate('/profile-setup/artisan');
             break;
           case 'client':
-            navigate('/client/dashboard');
+            navigate('/profile-setup/client');
             break;
           case 'admin':
             navigate('/admin/dashboard');

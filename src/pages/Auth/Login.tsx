@@ -49,24 +49,27 @@ export default function Login() {
         const userType = result.data.user.type;
         console.log('✅ Login successful! User type:', userType);
         
-        // Redirect based on user type
-        switch (userType) {
-          case 'client':
-            console.log('🚀 Redirecting to /client/dashboard');
-            navigate('/client/dashboard');
-            break;
-          case 'artisan':
-            console.log('🚀 Redirecting to /artisan/dashboard');
-            navigate('/artisan/dashboard');
-            break;
-          case 'admin':
-            console.log('🚀 Redirecting to /admin/dashboard');
-            navigate('/admin/dashboard');
-            break;
-          default:
-            console.log('🚀 Redirecting to /');
-            navigate('/');
-        }
+        // Small delay to ensure state is fully updated
+        setTimeout(() => {
+          // Redirect based on user type
+          switch (userType) {
+            case 'client':
+              console.log('🚀 Redirecting to /client/dashboard');
+              navigate('/client/dashboard', { replace: true });
+              break;
+            case 'artisan':
+              console.log('🚀 Redirecting to /artisan/dashboard');
+              navigate('/artisan/dashboard', { replace: true });
+              break;
+            case 'admin':
+              console.log('🚀 Redirecting to /admin/dashboard');
+              navigate('/admin/dashboard', { replace: true });
+              break;
+            default:
+              console.log('🚀 Redirecting to /');
+              navigate('/', { replace: true });
+          }
+        }, 100); // Small delay to ensure state propagation
       } else {
         console.error('❌ Login failed:', result.message);
         setError(result.message || 'Invalid email or password. Please check your credentials and try again.');

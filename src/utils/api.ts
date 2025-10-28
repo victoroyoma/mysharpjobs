@@ -46,7 +46,7 @@ export const authApi = {
     laravelApi.post('/auth/logout'),
   
   getProfile: () => 
-    laravelApi.get('/auth/profile'),
+    laravelApi.get('/auth/me'),
   
   refreshToken: (refreshToken: string) => 
     laravelApi.post<{ token: string }>('/auth/refresh', { refreshToken }),
@@ -170,6 +170,13 @@ export const jobApi = {
   // Reviews
   submitReview: (jobId: number, data: { rating: number; comment: string }) => 
     laravelApi.post(`/jobs/${jobId}/review`, data),
+
+  // My Jobs & Applications
+  myJobs: () => 
+    laravelApi.get('/jobs/my-jobs'),
+  
+  myApplications: () => 
+    laravelApi.get('/jobs/my-applications'),
 };
 
 // ============================================================================

@@ -9,7 +9,7 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuth } from '../../context/AuthContext';
 
 export default function JobDetails() {
-  const { id } = useParams<{ id: string }>();
+  const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [job, setJob] = useState<any>(null);
@@ -20,7 +20,7 @@ export default function JobDetails() {
   // Subscribe to real-time job updates
   useWebSocket(user?.id ? Number(user.id) : null, {
     onJobUpdated: (data) => {
-      if (data.job_id === Number(id)) {
+      if (data.job_id === Number(jobId)) {
         console.log('Job updated in real-time:', data);
         setJob((prev: any) => ({ ...prev, ...data }));
       }
@@ -28,17 +28,18 @@ export default function JobDetails() {
   });
 
   useEffect(() => {
-    if (id) {
+    if (jobId) {
       fetchJob();
       fetchApplications();
     }
-  }, [id]);
+  }, [jobId]);
 
   const fetchJob = async () => {
     try {
       setLoading(true);
-      const response = await jobApi.getJobById(Number(id));
-      setJob(response.data);
+      const response = await jobApi.getJobById(Number(jobId));
+      // Backend returns { status: 'success', data: { job: {...} } }
+      setJob(response.data.job || response.data);
     } catch (error: any) {
       console.error('Failed to fetch job:', error);
       alert('Failed to load job details');
@@ -49,7 +50,7 @@ export default function JobDetails() {
 
   const fetchApplications = async () => {
     try {
-      const response = await jobApi.getApplications(Number(id));
+      const response = await jobApi.getApplications(Number(jobId));
       setApplications(response.data);
     } catch (error: any) {
       console.error('Failed to fetch applications:', error);
@@ -65,7 +66,7 @@ export default function JobDetails() {
 
     try {
       setSubmitting(true);
-      await jobApi.applyToJob(Number(id), {
+      await jobApi.applyToJob(Number(jobId), {
         proposal: 'I am interested in this job and have the required skills.',
         estimatedDuration: job.estimated_duration || '1-2 days'
       });
@@ -82,7 +83,7 @@ export default function JobDetails() {
   const handleAcceptApplication = async (applicationId: number) => {
     try {
       setSubmitting(true);
-      await jobApi.acceptApplication(Number(id), applicationId);
+      await jobApi.acceptApplication(Number(jobId), applicationId);
       alert('Application accepted!');
       fetchJob();
       fetchApplications();
@@ -97,7 +98,7 @@ export default function JobDetails() {
   const handleCompleteJob = async () => {
     try {
       setSubmitting(true);
-      await jobApi.completeJob(Number(id));
+      await jobApi.completeJob(Number(jobId));
       alert('Job marked as complete!');
       fetchJob();
     } catch (error: any) {
@@ -332,7 +333,7 @@ export default function JobDetails() {
                       </Button>
                     </Link>
                     {job.artisan_id && (
-                      <Link to={`/job/${id}/track`}>
+                      <Link to={`/job/${jobId}/track`}>
                         <Button variant="secondary" fullWidth>
                           Track Artisan
                         </Button>

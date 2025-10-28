@@ -10,6 +10,7 @@ import {
   Trash2,
   Eye
 } from 'lucide-react';
+import { laravelApi } from '../utils/laravelApi';
 
 interface Notification {
   id: string;
@@ -67,15 +68,10 @@ export default function EnhancedNotificationCenter({ userId, userType }: Notific
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/notifications?userId=${userId}&userType=${userType}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await laravelApi.get('/notifications');
       
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications);
+      if (response.data) {
+        setNotifications(response.data.data || response.data);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -86,12 +82,7 @@ export default function EnhancedNotificationCenter({ userId, userType }: Notific
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      await laravelApi.patch(`/notifications/${notificationId}/read`);
       
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
@@ -103,12 +94,7 @@ export default function EnhancedNotificationCenter({ userId, userType }: Notific
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/mark-all-read', {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      await laravelApi.patch('/notifications/mark-all-read');
       
       setNotifications(prev =>
         prev.map(n => ({ ...n, isRead: true }))
@@ -120,12 +106,7 @@ export default function EnhancedNotificationCenter({ userId, userType }: Notific
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      await fetch(`/api/notifications/${notificationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      await laravelApi.delete(`/notifications/${notificationId}`);
       
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
     } catch (error) {

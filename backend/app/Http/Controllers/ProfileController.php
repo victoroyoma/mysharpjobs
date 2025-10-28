@@ -43,6 +43,140 @@ class ProfileController extends Controller
     }
 
     /**
+     * Update user profile (unified method for all fields)
+     */
+    public function update(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            // Base validation rules
+            $rules = [
+                'name' => 'sometimes|required|string|max:255',
+                'phone' => 'sometimes|nullable|string|max:20',
+                'bio' => 'sometimes|nullable|string|max:2000',
+                'location' => 'sometimes|required|string|max:500',
+            ];
+
+            // Artisan-specific rules
+            if ($user->type === 'artisan') {
+                $rules = array_merge($rules, [
+                    'skills' => 'sometimes|nullable|array',
+                    'skills.*.name' => 'required_with:skills|string|max:100',
+                    'skills.*.level' => 'required_with:skills|string|in:Beginner,Intermediate,Expert',
+                    'experience' => 'sometimes|nullable|integer|min:0|max:100',
+                    'hourly_rate' => 'sometimes|nullable|numeric|min:0|max:999999.99',
+                    'certifications' => 'sometimes|nullable|array',
+                    'certifications.*.name' => 'required_with:certifications|string|max:255',
+                    'certifications.*.issuer' => 'required_with:certifications|string|max:255',
+                    'certifications.*.date' => 'required_with:certifications|date',
+                    'service_radius' => 'sometimes|nullable|integer|min:5|max:100',
+                    'is_available' => 'sometimes|boolean',
+                ]);
+            }
+
+            // Client-specific rules
+            if ($user->type === 'client') {
+                $rules = array_merge($rules, [
+                    'company_name' => 'sometimes|nullable|string|max:255',
+                    'business_type' => 'sometimes|nullable|string|max:100',
+                ]);
+            }
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Collect validated data
+            $validatedData = $validator->validated();
+            
+            // Ensure we don't try to mass-assign fields that don't exist
+            $fillableData = array_intersect_key($validatedData, array_flip($user->getFillable()));
+
+            if (empty($fillableData)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No valid fields provided for update.',
+                ], 400);
+            }
+
+            // Add timestamp and update
+            $fillableData['profile_updated_at'] = now();
+            $user->update($fillableData);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Profile updated successfully!',
+                'data' => $user->fresh() // Return the updated user model
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Profile update exception for user ' . $user->id, [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred while updating the profile.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update availability status (quick toggle)
+     */
+    public function updateAvailability(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if ($user->type !== 'artisan') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Only artisans can update availability'
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'is_available' => 'required|boolean'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation error',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user->update([
+                'is_available' => $request->is_available,
+                'profile_updated_at' => now()
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Availability updated successfully',
+                'data' => [
+                    'is_available' => $user->is_available
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error updating availability: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Update client profile
      */
     public function updateClientProfile(Request $request)
@@ -242,16 +376,16 @@ class ProfileController extends Controller
 
             // Get statistics
             $stats = [
-                'jobs_completed' => $user->jobs_completed,
+                'completed_jobs' => $user->completed_jobs ?? 0,
                 'active_jobs' => Job::where('artisan_id', $user->id)
                     ->where('status', 'in-progress')
                     ->count(),
                 'pending_applications' => Job::where('status', 'open')
                     ->whereJsonContains('applicants', ['user_id' => $user->id])
                     ->count(),
-                'total_earned' => $user->total_earned,
-                'rating' => $user->rating,
-                'total_reviews' => $user->total_reviews,
+                'total_earnings' => 0, // TODO: Calculate from completed jobs
+                'rating' => $user->rating ?? 0,
+                'review_count' => $user->review_count ?? 0,
             ];
 
             // Get current jobs
@@ -306,46 +440,46 @@ class ProfileController extends Controller
      */
     public function uploadProfilePicture(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // 5MB max
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
         try {
-            $validator = Validator::make($request->all(), [
-                'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation error',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
             $user = $request->user();
 
-            // Delete old avatar if exists (if stored locally)
+            // Delete old avatar if it exists and is a local file
             if ($user->avatar && str_starts_with($user->avatar, 'storage/')) {
-                Storage::delete('public/' . str_replace('storage/', '', $user->avatar));
+                Storage::disk('public')->delete(str_replace('storage/', '', $user->avatar));
             }
 
-            // Store new image
+            // Store new image and get URL
             $path = $request->file('image')->store('avatars', 'public');
-            $url = Storage::url($path);
+            $url = Storage::disk('public')->url($path);
 
             // Update user avatar
-            $user->avatar = $url;
-            $user->save();
+            $user->update(['avatar' => $url]);
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Profile picture uploaded successfully',
-                'data' => [
-                    'avatar' => $url
-                ]
+                'message' => 'Profile picture uploaded successfully!',
+                'data' => ['avatar' => $url]
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Avatar upload failed for user ' . $request->user()->id, [
+                'error' => $e->getMessage()
+            ]);
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error uploading profile picture: ' . $e->getMessage()
+                'message' => 'Failed to upload profile picture.'
             ], 500);
         }
     }
@@ -410,9 +544,9 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete portfolio image
+     * Delete portfolio image by index
      */
-    public function deletePortfolioImage(Request $request)
+    public function deletePortfolioImage(Request $request, $index = null)
     {
         try {
             $user = $request->user();
@@ -424,31 +558,44 @@ class ProfileController extends Controller
                 ], 403);
             }
 
-            $validator = Validator::make($request->all(), [
-                'image_url' => 'required|string',
-            ]);
+            // Accept index from route parameter or request body
+            $imageIndex = $index ?? $request->input('index');
 
-            if ($validator->fails()) {
+            if ($imageIndex === null) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Validation error',
-                    'errors' => $validator->errors()
+                    'message' => 'Image index is required'
                 ], 422);
             }
 
             $portfolioImages = $user->portfolio_images ?? [];
             
-            // Remove the image URL from array
-            $portfolioImages = array_values(array_filter($portfolioImages, function($img) use ($request) {
-                return $img !== $request->image_url;
-            }));
-
-            // Delete file if stored locally
-            if (str_starts_with($request->image_url, 'storage/')) {
-                Storage::delete('public/' . str_replace('storage/', '', $request->image_url));
+            // Validate index exists
+            if (!isset($portfolioImages[$imageIndex])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Image not found at index ' . $imageIndex
+                ], 404);
             }
 
+            $imageUrl = $portfolioImages[$imageIndex];
+
+            // Delete file if stored locally
+            if (str_starts_with($imageUrl, '/storage/')) {
+                $filePath = str_replace('/storage/', '', $imageUrl);
+                Storage::disk('public')->delete($filePath);
+            } elseif (str_starts_with($imageUrl, 'storage/')) {
+                Storage::disk('public')->delete(str_replace('storage/', '', $imageUrl));
+            }
+
+            // Remove the image from array
+            unset($portfolioImages[$imageIndex]);
+            
+            // Re-index array to maintain sequential keys
+            $portfolioImages = array_values($portfolioImages);
+
             $user->portfolio_images = $portfolioImages;
+            $user->portfolio_updated_at = now();
             $user->save();
 
             return response()->json([

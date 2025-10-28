@@ -64,7 +64,7 @@ class AdminController extends Controller
 
             // User satisfaction (average rating)
             $avgRating = User::where('type', 'artisan')
-                ->where('total_reviews', '>', 0)
+                ->where('review_count', '>', 0)
                 ->avg('rating') ?? 0;
 
             // Response time (average time to first message on jobs)
@@ -105,6 +105,156 @@ class AdminController extends Controller
     }
 
     /**
+     * Get system health metrics
+     */
+    public function getSystemHealth()
+    {
+        try {
+            // Database health check
+            $dbStatus = 'online';
+            $dbResponseTime = 0;
+            try {
+                $start = microtime(true);
+                \DB::connection()->getPdo();
+                $dbResponseTime = round((microtime(true) - $start) * 1000, 2); // in milliseconds
+            } catch (\Exception $e) {
+                $dbStatus = 'offline';
+            }
+
+            // Cache health check (if using Redis/Memcached)
+            $cacheStatus = 'online';
+            $cacheResponseTime = 0;
+            try {
+                $start = microtime(true);
+                \Cache::has('health_check_key');
+                $cacheResponseTime = round((microtime(true) - $start) * 1000, 2);
+            } catch (\Exception $e) {
+                $cacheStatus = 'offline';
+            }
+
+            // Queue health check
+            $queueStatus = 'online';
+            $pendingJobs = 0;
+            $failedJobs = 0;
+            try {
+                $pendingJobs = \DB::table('jobs')->where('queue', 'default')->count();
+                $failedJobs = \DB::table('failed_jobs')->count();
+            } catch (\Exception $e) {
+                $queueStatus = 'offline';
+            }
+
+            // Server metrics
+            $uptime = 0;
+            $memoryUsage = [
+                'used' => 0,
+                'free' => 0,
+                'total' => 0,
+                'percentage' => 0
+            ];
+            
+            // Get PHP memory usage
+            $memoryUsage['used'] = memory_get_usage(true);
+            $memoryLimit = ini_get('memory_limit');
+            if (preg_match('/^(\d+)(.)$/', $memoryLimit, $matches)) {
+                if ($matches[2] == 'M') {
+                    $memoryUsage['total'] = $matches[1] * 1024 * 1024;
+                } elseif ($matches[2] == 'K') {
+                    $memoryUsage['total'] = $matches[1] * 1024;
+                } elseif ($matches[2] == 'G') {
+                    $memoryUsage['total'] = $matches[1] * 1024 * 1024 * 1024;
+                }
+            }
+            $memoryUsage['free'] = $memoryUsage['total'] - $memoryUsage['used'];
+            $memoryUsage['percentage'] = $memoryUsage['total'] > 0 
+                ? round(($memoryUsage['used'] / $memoryUsage['total']) * 100, 2) 
+                : 0;
+
+            // Active database connections
+            $activeConnections = 0;
+            try {
+                $activeConnections = \DB::select('SHOW STATUS WHERE variable_name = "Threads_connected"')[0]->Value ?? 0;
+            } catch (\Exception $e) {
+                // Fallback if query fails
+                $activeConnections = 1;
+            }
+
+            // Storage health
+            $storageStatus = 'online';
+            $diskUsage = [
+                'total' => disk_total_space('/'),
+                'free' => disk_free_space('/'),
+                'used' => 0,
+                'percentage' => 0
+            ];
+            $diskUsage['used'] = $diskUsage['total'] - $diskUsage['free'];
+            $diskUsage['percentage'] = $diskUsage['total'] > 0 
+                ? round(($diskUsage['used'] / $diskUsage['total']) * 100, 2) 
+                : 0;
+
+            // API response times (sample recent activities)
+            $avgApiResponseTime = 0;
+            try {
+                $start = microtime(true);
+                User::limit(10)->get();
+                $avgApiResponseTime = round((microtime(true) - $start) * 1000, 2);
+            } catch (\Exception $e) {
+                $avgApiResponseTime = 0;
+            }
+
+            // Determine overall system status
+            $overallStatus = 'healthy';
+            if ($dbStatus === 'offline' || $cacheStatus === 'offline') {
+                $overallStatus = 'critical';
+            } elseif ($memoryUsage['percentage'] > 90 || $diskUsage['percentage'] > 90) {
+                $overallStatus = 'warning';
+            } elseif ($failedJobs > 10) {
+                $overallStatus = 'warning';
+            }
+
+            $health = [
+                'status' => $overallStatus,
+                'timestamp' => now()->toIso8601String(),
+                'database' => [
+                    'status' => $dbStatus,
+                    'response_time' => $dbResponseTime,
+                    'connections' => $activeConnections
+                ],
+                'cache' => [
+                    'status' => $cacheStatus,
+                    'response_time' => $cacheResponseTime
+                ],
+                'queue' => [
+                    'status' => $queueStatus,
+                    'pending_jobs' => $pendingJobs,
+                    'failed_jobs' => $failedJobs
+                ],
+                'server' => [
+                    'status' => 'online',
+                    'uptime' => $uptime,
+                    'memory_usage' => $memoryUsage,
+                    'disk_usage' => $diskUsage,
+                    'active_connections' => $activeConnections
+                ],
+                'api' => [
+                    'avg_response_time' => $avgApiResponseTime
+                ]
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'System health retrieved successfully',
+                'data' => $health
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching system health: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get all users with filters (admin view)
      */
     public function getAllUsers(Request $request)
@@ -130,10 +280,25 @@ class AdminController extends Controller
                 });
             }
 
-            // Sorting
+            // Sorting with field mapping and validation
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
-            $query->orderBy($sortBy, $sortOrder);
+            
+            // Map frontend field names to database column names
+            $sortFieldMap = [
+                'lastUpdate' => 'last_active',
+                'createdAt' => 'created_at',
+                'created_at' => 'created_at',
+                'name' => 'name',
+                'email' => 'email',
+                'type' => 'type',
+                'last_active' => 'last_active',
+                'is_verified' => 'is_verified',
+            ];
+            
+            // Use mapped field or default to created_at if invalid
+            $sortColumn = $sortFieldMap[$sortBy] ?? 'created_at';
+            $query->orderBy($sortColumn, $sortOrder);
 
             // Pagination
             $perPage = $request->get('per_page', 20);
@@ -189,10 +354,27 @@ class AdminController extends Controller
                 $query->where('created_at', '<=', $request->to_date);
             }
 
-            // Sorting
+            // Sorting with field mapping and validation
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
-            $query->orderBy($sortBy, $sortOrder);
+            
+            // Map frontend field names to database column names
+            $sortFieldMap = [
+                'lastUpdate' => 'updated_at',
+                'createdAt' => 'created_at',
+                'created_at' => 'created_at',
+                'updated_at' => 'updated_at',
+                'amount' => 'budget',
+                'budget' => 'budget',
+                'status' => 'status',
+                'title' => 'title',
+                'category' => 'category',
+                'priority' => 'priority',
+            ];
+            
+            // Use mapped field or default to created_at if invalid
+            $sortColumn = $sortFieldMap[$sortBy] ?? 'created_at';
+            $query->orderBy($sortColumn, $sortOrder);
 
             // Pagination
             $perPage = $request->get('per_page', 20);
@@ -363,12 +545,22 @@ class AdminController extends Controller
                     $startDate = now()->startOfMonth();
             }
 
-            // User growth
-            $userGrowth = User::where('created_at', '>=', $startDate)
-                ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+            // User growth with breakdown by type
+            $userGrowthRaw = User::where('created_at', '>=', $startDate)
+                ->selectRaw('DATE(created_at) as date, type, COUNT(*) as count')
+                ->groupBy('date', 'type')
                 ->orderBy('date')
                 ->get();
+
+            // Transform user growth data to include client_count, artisan_count, and total
+            $userGrowth = $userGrowthRaw->groupBy('date')->map(function ($group) {
+                return [
+                    'date' => $group->first()->date,
+                    'client_count' => $group->where('type', 'client')->sum('count'),
+                    'artisan_count' => $group->where('type', 'artisan')->sum('count'),
+                    'total' => $group->sum('count'),
+                ];
+            })->values();
 
             // Job statistics
             $jobStats = Job::where('created_at', '>=', $startDate)
@@ -379,7 +571,7 @@ class AdminController extends Controller
             // Revenue by day
             $revenueByDay = Payment::where('status', 'completed')
                 ->where('created_at', '>=', $startDate)
-                ->selectRaw('DATE(created_at) as date, SUM(amount) as total')
+                ->selectRaw('DATE(created_at) as date, SUM(amount) as total_revenue')
                 ->groupBy('date')
                 ->orderBy('date')
                 ->get();
@@ -387,22 +579,48 @@ class AdminController extends Controller
             // Category distribution
             $categoryStats = Job::selectRaw('category, COUNT(*) as count')
                 ->groupBy('category')
+                ->orderBy('count', 'desc')
                 ->get();
 
-            // Top artisans
+            // Top artisans - Calculate jobs completed and total earned from relationships
             $topArtisans = User::where('type', 'artisan')
                 ->where('is_verified', true)
-                ->orderBy('rating', 'desc')
-                ->orderBy('jobs_completed', 'desc')
+                ->select('users.id', 'users.name', 'users.avatar', 'users.rating')
+                ->selectRaw('(SELECT COUNT(*) FROM jobs_custom WHERE jobs_custom.artisan_id = users.id AND jobs_custom.status = "completed") as completed_jobs')
+                ->selectRaw('(SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payments.artisan_id = users.id AND payments.status = "completed") as total_earned')
+                ->orderBy('users.rating', 'desc')
+                ->orderBy('completed_jobs', 'desc')
                 ->limit(10)
-                ->get(['id', 'name', 'avatar', 'rating', 'jobs_completed', 'total_earned']);
+                ->get()
+                ->map(function ($artisan) {
+                    return [
+                        'id' => $artisan->id,
+                        'name' => $artisan->name,
+                        'avatar' => $artisan->avatar,
+                        'avg_rating' => $artisan->rating ?? 0,
+                        'completed_jobs' => $artisan->completed_jobs ?? 0,
+                        'total_earned' => $artisan->total_earned ?? 0,
+                    ];
+                });
 
-            // Top clients
+            // Top clients - Calculate jobs posted and total spent from relationships
             $topClients = User::where('type', 'client')
+                ->select('users.id', 'users.name', 'users.avatar')
+                ->selectRaw('(SELECT COUNT(*) FROM jobs_custom WHERE jobs_custom.client_id = users.id) as jobs_posted')
+                ->selectRaw('(SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payments.client_id = users.id AND payments.status = "completed") as total_spent')
                 ->orderBy('jobs_posted', 'desc')
                 ->orderBy('total_spent', 'desc')
                 ->limit(10)
-                ->get(['id', 'name', 'avatar', 'jobs_posted', 'total_spent']);
+                ->get()
+                ->map(function ($client) {
+                    return [
+                        'id' => $client->id,
+                        'name' => $client->name,
+                        'avatar' => $client->avatar,
+                        'jobs_posted' => $client->jobs_posted ?? 0,
+                        'total_spent' => $client->total_spent ?? 0,
+                    ];
+                });
 
             return response()->json([
                 'status' => 'success',
@@ -668,6 +886,208 @@ class AdminController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error deleting user: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get detailed user information
+     */
+    public function getUserDetails($userId)
+    {
+        try {
+            $user = User::find($userId);
+
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Base user data
+            $userData = $user->toArray();
+
+            // Get job statistics based on user type
+            if ($user->type === 'client') {
+                $postedJobs = Job::where('client_id', $userId)->count();
+                $activeJobs = Job::where('client_id', $userId)
+                    ->whereIn('status', ['open', 'in-progress'])
+                    ->count();
+                $completedJobs = Job::where('client_id', $userId)
+                    ->where('status', 'completed')
+                    ->count();
+                $totalSpent = Payment::where('client_id', $userId)
+                    ->where('status', 'completed')
+                    ->sum('amount');
+
+                // Recent jobs posted
+                $recentJobs = Job::where('client_id', $userId)
+                    ->with('artisan')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(10)
+                    ->get();
+
+                $userData['stats'] = [
+                    'posted_jobs' => $postedJobs,
+                    'active_jobs' => $activeJobs,
+                    'completed_jobs' => $completedJobs,
+                    'total_spent' => $totalSpent,
+                ];
+                $userData['recent_jobs'] = $recentJobs;
+
+            } elseif ($user->type === 'artisan') {
+                $assignedJobs = Job::where('artisan_id', $userId)->count();
+                $activeJobs = Job::where('artisan_id', $userId)
+                    ->whereIn('status', ['in-progress'])
+                    ->count();
+                $completedJobs = Job::where('artisan_id', $userId)
+                    ->where('status', 'completed')
+                    ->count();
+                $totalEarnings = Payment::where('artisan_id', $userId)
+                    ->where('status', 'completed')
+                    ->sum('amount');
+
+                // Recent jobs worked on
+                $recentJobs = Job::where('artisan_id', $userId)
+                    ->with('client')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(10)
+                    ->get();
+
+                $userData['stats'] = [
+                    'assigned_jobs' => $assignedJobs,
+                    'active_jobs' => $activeJobs,
+                    'completed_jobs' => $completedJobs,
+                    'total_earnings' => $totalEarnings,
+                    'rating' => $user->rating ?? 0,
+                    'total_reviews' => $user->review_count ?? 0,
+                ];
+                $userData['recent_jobs'] = $recentJobs;
+            }
+
+            // Payment history
+            $payments = Payment::where(function($query) use ($userId, $user) {
+                if ($user->type === 'client') {
+                    $query->where('client_id', $userId);
+                } else {
+                    $query->where('artisan_id', $userId);
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+            $userData['recent_payments'] = $payments;
+
+            // Account activity
+            $userData['account_info'] = [
+                'is_verified' => $user->is_verified,
+                'is_suspended' => $user->is_suspended ?? false,
+                'suspension_reason' => $user->suspension_reason ?? null,
+                'verified_at' => $user->verified_at ?? null,
+                'last_login' => $user->last_login_at ?? null,
+                'profile_completed' => $user->profile_completed ?? false,
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'User details retrieved successfully',
+                'data' => $userData
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching user details: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get recent activities across the platform
+     */
+    public function getRecentActivities(Request $request)
+    {
+        try {
+            $limit = $request->get('limit', 50);
+            $activities = [];
+
+            // Get recent user registrations
+            $recentUsers = User::orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get(['id', 'name', 'email', 'type', 'created_at']);
+
+            foreach ($recentUsers as $user) {
+                $activities[] = [
+                    'id' => 'user_' . $user->id,
+                    'type' => 'user_registered',
+                    'user' => $user->name,
+                    'user_id' => $user->id,
+                    'user_type' => $user->type,
+                    'description' => "{$user->name} registered as {$user->type}",
+                    'timestamp' => $user->created_at,
+                    'priority' => 'low',
+                ];
+            }
+
+            // Get recent jobs
+            $recentJobs = Job::with(['client', 'artisan'])
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+
+            foreach ($recentJobs as $job) {
+                $activities[] = [
+                    'id' => 'job_' . $job->id,
+                    'type' => 'job_posted',
+                    'user' => $job->client->name ?? 'Unknown',
+                    'user_id' => $job->client_id,
+                    'job_id' => $job->id,
+                    'description' => "New job posted: {$job->title}",
+                    'timestamp' => $job->created_at,
+                    'priority' => 'medium',
+                    'amount' => $job->budget,
+                ];
+            }
+
+            // Get recent payments
+            $recentPayments = Payment::with(['client', 'artisan'])
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+
+            foreach ($recentPayments as $payment) {
+                $activities[] = [
+                    'id' => 'payment_' . $payment->id,
+                    'type' => 'payment_processed',
+                    'user' => $payment->client->name ?? 'Unknown',
+                    'user_id' => $payment->client_id,
+                    'description' => "Payment of \${$payment->amount} processed",
+                    'timestamp' => $payment->created_at,
+                    'priority' => 'high',
+                    'amount' => $payment->amount,
+                ];
+            }
+
+            // Sort all activities by timestamp
+            usort($activities, function($a, $b) {
+                return strtotime($b['timestamp']) - strtotime($a['timestamp']);
+            });
+
+            // Limit to requested amount
+            $activities = array_slice($activities, 0, $limit);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Recent activities retrieved successfully',
+                'data' => $activities
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching activities: ' . $e->getMessage()
             ], 500);
         }
     }
