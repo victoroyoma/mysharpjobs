@@ -317,6 +317,12 @@ export default function ClientDashboard() {
                           {job.priority === 'urgent' && (
                             <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">URGENT</span>
                           )}
+                          {job.applications_count > 0 && job.status === 'open' && (
+                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center">
+                              <UserIcon className="w-3 h-3 mr-1" />
+                              {job.applications_count} {job.applications_count === 1 ? 'Application' : 'Applications'}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-gray-600 mb-2">{job.description}</p>
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
@@ -330,7 +336,7 @@ export default function ClientDashboard() {
                           </span>
                           <span className="flex items-center">
                             <CalendarIcon className="w-4 h-4 mr-1" />
-                            {new Date(job.createdAt).toLocaleDateString()}
+                            {new Date(job.created_at).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
@@ -345,6 +351,16 @@ export default function ClientDashboard() {
                            'Open'}
                         </span>
                         <div className="flex space-x-2">
+                        {job.applications_count > 0 && job.status === 'open' && (
+                          <Button 
+                            size="sm" 
+                            variant="primary"
+                            onClick={() => navigate(`/jobs/${job.id}/applications`)}
+                          >
+                            <UserIcon className="w-4 h-4 mr-1" />
+                            Review ({job.applications_count})
+                          </Button>
+                        )}
                         <Button 
                           size="sm" 
                           variant="secondary"
@@ -355,7 +371,7 @@ export default function ClientDashboard() {
                         </Button>
                         <Button 
                           size="sm"
-                          onClick={() => navigate(`/job/${job.id}`)}
+                          onClick={() => navigate(`/jobs/${job.id}`)}
                         >
                           <ExternalLinkIcon className="w-4 h-4 mr-1" />
                           View

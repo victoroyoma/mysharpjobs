@@ -12,8 +12,7 @@ import {
   CameraIcon,
   PhoneIcon
 } from 'lucide-react';
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
+import ArtisanLayout from '../../components/Layout/ArtisanLayout';
 import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useAuth } from '../../context/AuthContext';
@@ -441,21 +440,17 @@ export default function EditableArtisanProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <div className="flex-grow flex items-center justify-center">
+      <ArtisanLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
           <LoadingSpinner size="lg" />
         </div>
-        <Footer />
-      </div>
+      </ArtisanLayout>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100">
-      <Header />
-      
-      <div className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <ArtisanLayout>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Actions */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -941,8 +936,6 @@ export default function EditableArtisanProfile() {
           )}
         </div>
       </div>
-
-      <Footer />
-    </div>
+    </ArtisanLayout>
   );
 }

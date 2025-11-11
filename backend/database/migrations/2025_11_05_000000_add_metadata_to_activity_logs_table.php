@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('jobs_custom', function (Blueprint $table) {
-            $table->json('applications')->nullable();
+        Schema::table('activity_logs', function (Blueprint $table) {
+            $table->json('metadata')->nullable()->after('description');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('jobs_custom', function (Blueprint $table) {
-            $table->dropColumn('applications');
+        Schema::table('activity_logs', function (Blueprint $table) {
+            $table->dropColumn('metadata');
         });
     }
 };

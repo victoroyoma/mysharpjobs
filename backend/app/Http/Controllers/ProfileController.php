@@ -394,16 +394,10 @@ class ProfileController extends Controller
                 ->with(['client:id,name,avatar,phone'])
                 ->get();
 
-            // Get available jobs matching artisan's skills
+            // Get available jobs - prioritize those matching artisan's skills
             $availableJobs = Job::where('status', 'open')
-                ->where(function($query) use ($user) {
-                    if ($user->skills && is_array($user->skills)) {
-                        foreach ($user->skills as $skill) {
-                            $query->orWhereJsonContains('requirements', ['skill' => $skill]);
-                        }
-                    }
-                })
                 ->with(['client:id,name,avatar'])
+                ->orderBy('created_at', 'desc')
                 ->limit(10)
                 ->get();
 

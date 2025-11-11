@@ -186,6 +186,7 @@ class JobController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'proposal' => 'required|string|min:20|max:5000',
+            'estimatedDuration' => 'required|string|max:100',
             'amount' => 'nullable|numeric|min:0',
         ]);
 
@@ -195,7 +196,7 @@ class JobController extends Controller
 
         try {
             $user = $request->user();
-            $job = Job::findOrFail($id);
+            $job = Job::with('client')->findOrFail($id);
 
             if (!$user->isArtisan()) {
                 return $this->sendError('Only artisans can apply for jobs.', [], 403);
@@ -213,9 +214,24 @@ class JobController extends Controller
                 }
             }
 
+            // Include complete artisan profile information in the application
             $applications[] = [
                 'artisan_id' => $user->id,
+                'artisan_name' => $user->name,
+                'artisan_email' => $user->email,
+                'artisan_phone' => $user->phone,
+                'artisan_avatar' => $user->avatar,
+                'artisan_bio' => $user->bio,
+                'artisan_skills' => $user->skills,
+                'artisan_experience' => $user->experience,
+                'artisan_rating' => $user->rating,
+                'artisan_review_count' => $user->review_count,
+                'artisan_completed_jobs' => $user->completed_jobs,
+                'artisan_hourly_rate' => $user->hourly_rate,
+                'artisan_location' => $user->location,
+                'artisan_portfolio_images' => $user->portfolio_images,
                 'proposal' => $request->proposal,
+                'estimated_duration' => $request->estimatedDuration,
                 'amount' => $request->amount,
                 'status' => 'pending',
                 'applied_at' => now()->toIso8601String(),
@@ -224,18 +240,67 @@ class JobController extends Controller
             $job->applications = $applications;
             $job->save();
             
-            // Log activity
+            // Log activity for artisan
             ActivityLog::create([
                 'user_id' => $user->id,
                 'activity_type' => 'job_application',
-                'description' => "Artisan {$user->name} applied for job: {$job->title}",
+                'description' => "Applied for job: {$job->title}",
                 'resource_id' => $job->id,
                 'resource_type' => 'Job',
+                'metadata' => json_encode([
+                    'job_id' => $job->id,
+                    'job_title' => $job->title,
+                    'client_id' => $job->client_id,
+                ]),
             ]);
 
-            return $this->sendResponse(['job' => $job], 'Application submitted successfully.');
+            // Log activity for client (job owner)
+            ActivityLog::create([
+                'user_id' => $job->client_id,
+                'activity_type' => 'job_application_received',
+                'description' => "New application from {$user->name} for job: {$job->title}",
+                'resource_id' => $job->id,
+                'resource_type' => 'Job',
+                'metadata' => json_encode([
+                    'artisan_id' => $user->id,
+                    'artisan_name' => $user->name,
+                    'job_id' => $job->id,
+                    'job_title' => $job->title,
+                ]),
+            ]);
+
+            // Log activity for admin
+            $adminUsers = User::where('type', 'admin')->get();
+            $clientName = $job->client ? $job->client->name : 'Unknown Client';
+            foreach ($adminUsers as $admin) {
+                ActivityLog::create([
+                    'user_id' => $admin->id,
+                    'activity_type' => 'job_application_submitted',
+                    'description' => "Artisan {$user->name} applied for job: {$job->title} (Client: {$clientName})",
+                    'resource_id' => $job->id,
+                    'resource_type' => 'Job',
+                    'metadata' => json_encode([
+                        'artisan_id' => $user->id,
+                        'artisan_name' => $user->name,
+                        'client_id' => $job->client_id,
+                        'client_name' => $clientName,
+                        'job_id' => $job->id,
+                        'job_title' => $job->title,
+                    ]),
+                ]);
+            }
+
+            return $this->sendResponse([
+                'job' => $job,
+                'message' => 'Your application has been submitted successfully. The client will review your profile and proposal.'
+            ], 'Application submitted successfully.');
 
         } catch (\Exception $e) {
+            // Log the full exception for debugging
+            \Log::error('Job application error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
             return $this->sendError('Failed to apply for job.', ['error' => $e->getMessage()], 500);
         }
     }
@@ -403,6 +468,58 @@ class JobController extends Controller
     }
 
     /**
+     * Reject an artisan's application for a job
+     */
+    public function rejectApplication(Request $request, $id, $artisanId)
+    {
+        try {
+            $job = Job::findOrFail($id);
+            $user = $request->user();
+
+            // Only the client who posted the job can reject applications
+            if ($job->client_id !== $user->id) {
+                return $this->sendError('You are not authorized to reject applications for this job.', [], 403);
+            }
+
+            $applications = $job->applications ?? [];
+            $applicationFound = false;
+            
+            foreach ($applications as &$application) {
+                if ($application['artisan_id'] == $artisanId) {
+                    $application['status'] = 'rejected';
+                    $applicationFound = true;
+                    break;
+                }
+            }
+
+            if (!$applicationFound) {
+                return $this->sendError('This artisan has not applied for the job.', [], 404);
+            }
+
+            $job->applications = $applications;
+            $job->save();
+
+            // Log activity
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'activity_type' => 'application_rejected',
+                'description' => "Client {$user->name} rejected application for job: {$job->title}",
+                'resource_id' => $job->id,
+                'resource_type' => 'Job',
+                'metadata' => json_encode([
+                    'artisan_id' => $artisanId,
+                    'job_id' => $job->id,
+                ]),
+            ]);
+
+            return $this->sendResponse(['job' => $job], 'Application rejected successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Failed to reject application.', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Complete a job
      */
     public function complete(Request $request, $id)
@@ -564,22 +681,34 @@ class JobController extends Controller
         try {
             $user = $request->user();
 
-            if (!$user->isArtisan()) {
+            if (!$user || !$user->isArtisan()) {
                 return $this->sendError('You are not authorized to view this page.', [], 403);
             }
 
             // This is inefficient for large datasets. A dedicated 'applications' table would be better.
-            $jobs = Job::whereJsonContains('applications', [['artisan_id' => $user->id]])
+            // Get all jobs and filter in PHP to handle cases where applications column might be null
+            $jobs = Job::whereNotNull('applications')
                 ->with(['client'])
-                ->get();
+                ->get()
+                ->filter(function ($job) use ($user) {
+                    if (!$job->applications) {
+                        return false;
+                    }
+                    $applications = is_string($job->applications) ? json_decode($job->applications, true) : $job->applications;
+                    if (!is_array($applications)) {
+                        return false;
+                    }
+                    return collect($applications)->contains('artisan_id', $user->id);
+                });
             
             // Add application details to each job object
             $jobs->each(function ($job) use ($user) {
-                $application = collect($job->applications)->firstWhere('artisan_id', $user->id);
+                $applications = is_string($job->applications) ? json_decode($job->applications, true) : $job->applications;
+                $application = collect($applications)->firstWhere('artisan_id', $user->id);
                 $job->my_application = $application;
             });
 
-            return $this->sendResponse(['applications' => $jobs], 'Your applications retrieved successfully.');
+            return $this->sendResponse(['applications' => $jobs->values()], 'Your applications retrieved successfully.');
 
         } catch (\Exception $e) {
             return $this->sendError('Failed to retrieve your applications.', ['error' => $e->getMessage()], 500);

@@ -56,7 +56,9 @@ Route::prefix('jobs')->group(function () {
         Route::put('/{id}', [JobController::class, 'update']);
         Route::delete('/{id}', [JobController::class, 'destroy']);
         Route::post('/{id}/apply', [JobController::class, 'apply']);
+        Route::get('/{id}/applications', [JobController::class, 'getApplications']);
         Route::post('/{id}/accept/{artisanId}', [JobController::class, 'acceptApplication']);
+        Route::post('/{id}/reject/{artisanId}', [JobController::class, 'rejectApplication']);
         Route::post('/{id}/start', [JobController::class, 'start']);
         Route::post('/{id}/complete', [JobController::class, 'complete']);
         Route::post('/{id}/cancel', [JobController::class, 'cancel']);
@@ -190,6 +192,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{id}', [AdminController::class, 'getUserDetails']);
         Route::get('/jobs', [AdminController::class, 'getAllJobs']);
         Route::get('/activities', [AdminController::class, 'getRecentActivities']);
+        Route::get('/activity-logs', [AdminController::class, 'getActivityLogs']);
+        Route::get('/job-applications/stats', [AdminController::class, 'getJobApplicationStats']);
         Route::get('/disputes', [AdminController::class, 'getDisputes']);
         Route::post('/disputes/{id}/resolve', [AdminController::class, 'resolveDispute']);
         Route::put('/users/{id}/suspend', [AdminController::class, 'suspendUser']);

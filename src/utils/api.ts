@@ -144,11 +144,11 @@ export const jobApi = {
   getApplications: (jobId: number) => 
     laravelApi.get(`/jobs/${jobId}/applications`),
   
-  acceptApplication: (jobId: number, applicationId: number) => 
-    laravelApi.post(`/jobs/${jobId}/applications/${applicationId}/accept`),
+  acceptApplication: (jobId: number, artisanId: number) => 
+    laravelApi.post(`/jobs/${jobId}/accept/${artisanId}`),
   
-  rejectApplication: (jobId: number, applicationId: number) => 
-    laravelApi.post(`/jobs/${jobId}/applications/${applicationId}/reject`),
+  rejectApplication: (jobId: number, artisanId: number) => 
+    laravelApi.post(`/jobs/${jobId}/reject/${artisanId}`),
   
   // Job lifecycle
   startJob: (jobId: number) => 

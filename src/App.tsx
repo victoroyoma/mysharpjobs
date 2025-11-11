@@ -31,6 +31,7 @@ const PostJob = lazy(() => import('./pages/Job/PostJob'));
 const JobDetails = lazy(() => import('./pages/Job/JobDetails'));
 const ArtisanJobManagement = lazy(() => import('./pages/Job/ArtisanJobManagement'));
 const ArtisanPayments = lazy(() => import('./pages/Job/ArtisanPayments'));
+const JobApplicationsView = lazy(() => import('./pages/Job/JobApplicationsView'));
 
 // Search components
 const SearchPage = lazy(() => import('./pages/Search/SearchPage'));
@@ -245,6 +246,14 @@ function App() {
                       <ProtectedRoute>
                         <Suspense fallback={<EnhancedLoadingSpinner message="Loading job details..." />}>
                           <JobDetails />
+                        </Suspense>
+                      </ProtectedRoute>
+                    } />
+                    
+                    <Route path="/jobs/:id/applications" element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<EnhancedLoadingSpinner message="Loading applications..." />}>
+                          <JobApplicationsView />
                         </Suspense>
                       </ProtectedRoute>
                     } />

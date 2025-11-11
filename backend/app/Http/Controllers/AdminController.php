@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Job;
 use App\Models\Message;
 use App\Models\Payment;
+use App\Models\ActivityLog;
 use App\Mail\VerificationApproved;
 use App\Mail\VerificationRejected;
 use App\Mail\AccountSuspended;
@@ -1013,6 +1014,33 @@ class AdminController extends Controller
             $limit = $request->get('limit', 50);
             $activities = [];
 
+            // Get activity logs from database (job applications, etc.)
+            $activityLogs = ActivityLog::with('user')
+                ->orderBy('created_at', 'desc')
+                ->limit(20)
+                ->get();
+
+            foreach ($activityLogs as $log) {
+                $priority = 'medium';
+                if (in_array($log->activity_type, ['job_application', 'job_application_received', 'application_accepted'])) {
+                    $priority = 'high';
+                }
+
+                $activities[] = [
+                    'id' => 'activity_' . $log->id,
+                    'type' => $log->activity_type,
+                    'user' => $log->user->name ?? 'Unknown',
+                    'user_id' => $log->user_id,
+                    'user_type' => $log->user->type ?? null,
+                    'description' => $log->description,
+                    'timestamp' => $log->created_at,
+                    'priority' => $priority,
+                    'metadata' => $log->metadata,
+                    'resource_type' => $log->resource_type,
+                    'resource_id' => $log->resource_id,
+                ];
+            }
+
             // Get recent user registrations
             $recentUsers = User::orderBy('created_at', 'desc')
                 ->limit(10)
@@ -1088,6 +1116,144 @@ class AdminController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error fetching activities: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get activity logs with filtering
+     */
+    public function getActivityLogs(Request $request)
+    {
+        try {
+            $query = ActivityLog::with(['user'])
+                ->orderBy('created_at', 'desc');
+
+            // Filter by activity type
+            if ($request->has('activity_type')) {
+                $query->where('activity_type', $request->activity_type);
+            }
+
+            // Filter by user
+            if ($request->has('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            // Filter by resource
+            if ($request->has('resource_type')) {
+                $query->where('resource_type', $request->resource_type);
+            }
+
+            if ($request->has('resource_id')) {
+                $query->where('resource_id', $request->resource_id);
+            }
+
+            // Filter by date range
+            if ($request->has('from_date')) {
+                $query->where('created_at', '>=', $request->from_date);
+            }
+
+            if ($request->has('to_date')) {
+                $query->where('created_at', '<=', $request->to_date);
+            }
+
+            // Pagination
+            $perPage = $request->get('per_page', 20);
+            $logs = $query->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Activity logs retrieved successfully',
+                'data' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching activity logs: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get job application statistics for admin
+     */
+    public function getJobApplicationStats(Request $request)
+    {
+        try {
+            // Total applications
+            $totalApplications = ActivityLog::where('activity_type', 'job_application')->count();
+
+            // Applications today
+            $applicationsToday = ActivityLog::where('activity_type', 'job_application')
+                ->whereDate('created_at', today())
+                ->count();
+
+            // Applications this week
+            $applicationsThisWeek = ActivityLog::where('activity_type', 'job_application')
+                ->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+                ->count();
+
+            // Applications this month
+            $applicationsThisMonth = ActivityLog::where('activity_type', 'job_application')
+                ->whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
+                ->count();
+
+            // Accepted applications
+            $acceptedApplications = ActivityLog::where('activity_type', 'application_accepted')->count();
+
+            // Rejected applications
+            $rejectedApplications = ActivityLog::where('activity_type', 'application_rejected')->count();
+
+            // Acceptance rate
+            $acceptanceRate = $totalApplications > 0 ? ($acceptedApplications / $totalApplications) * 100 : 0;
+
+            // Average time to accept (simplified)
+            $avgTimeToAccept = 24; // hours (placeholder - would need more complex calculation)
+
+            // Recent applications with details
+            $recentApplications = ActivityLog::where('activity_type', 'job_application')
+                ->with('user')
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(function($log) {
+                    $metadata = $log->metadata ?? [];
+                    return [
+                        'id' => $log->id,
+                        'artisan_name' => $log->user->name ?? 'Unknown',
+                        'artisan_id' => $log->user_id,
+                        'job_id' => $metadata['job_id'] ?? null,
+                        'job_title' => $metadata['job_title'] ?? 'Unknown Job',
+                        'client_id' => $metadata['client_id'] ?? null,
+                        'applied_at' => $log->created_at,
+                        'description' => $log->description,
+                    ];
+                });
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Job application statistics retrieved successfully',
+                'data' => [
+                    'stats' => [
+                        'total_applications' => $totalApplications,
+                        'applications_today' => $applicationsToday,
+                        'applications_this_week' => $applicationsThisWeek,
+                        'applications_this_month' => $applicationsThisMonth,
+                        'accepted_applications' => $acceptedApplications,
+                        'rejected_applications' => $rejectedApplications,
+                        'acceptance_rate' => round($acceptanceRate, 2),
+                        'avg_time_to_accept_hours' => $avgTimeToAccept,
+                    ],
+                    'recent_applications' => $recentApplications,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error fetching application stats: ' . $e->getMessage()
             ], 500);
         }
     }

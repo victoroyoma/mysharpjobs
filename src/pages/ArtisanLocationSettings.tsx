@@ -11,8 +11,7 @@ import {
   InfoIcon,
   LockIcon
 } from 'lucide-react';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
+import ArtisanLayout from '../components/Layout/ArtisanLayout';
 import Button from '../components/Button';
 
 export default function ArtisanLocationSettings() {
@@ -41,13 +40,11 @@ export default function ArtisanLocationSettings() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header />
-      
-      <div className="flex-grow">
+    <ArtisanLayout>
+      <div className="bg-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="mb-6">
-            <Link to="/dashboard" className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+            <Link to="/artisan/dashboard" className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
               ← Back to dashboard
             </Link>
           </div>
@@ -276,57 +273,55 @@ export default function ArtisanLocationSettings() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Consent Modal */}
-      {showConsentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center mb-4">
-              <AlertTriangleIcon className="h-6 w-6 text-red-600 mr-3" />
-              <h3 className="text-lg font-medium text-gray-900">Disable Location Services?</h3>
-            </div>
-            
-            <p className="text-sm text-gray-600 mb-6">
-              Disabling location services will:
-            </p>
-            
-            <ul className="text-sm text-gray-600 mb-6 space-y-2">
-              <li className="flex items-start">
-                <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                Prevent you from receiving local job opportunities
-              </li>
-              <li className="flex items-start">
-                <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                Disable real-time tracking for active jobs
-              </li>
-              <li className="flex items-start">
-                <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                Remove your location from your public profile
-              </li>
-            </ul>
-            
-            <div className="flex space-x-3">
-              <Button 
-                variant="secondary" 
-                fullWidth
-                onClick={() => setShowConsentModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button 
-                variant="danger" 
-                fullWidth
-                onClick={confirmDisableLocation}
-              >
-                Disable
-              </Button>
+        {/* Consent Modal */}
+        {showConsentModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <div className="flex items-center mb-4">
+                <AlertTriangleIcon className="h-6 w-6 text-red-600 mr-3" />
+                <h3 className="text-lg font-medium text-gray-900">Disable Location Services?</h3>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-6">
+                Disabling location services will:
+              </p>
+              
+              <ul className="text-sm text-gray-600 mb-6 space-y-2">
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  Prevent you from receiving local job opportunities
+                </li>
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  Disable real-time tracking for active jobs
+                </li>
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-red-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                  Remove your location from your public profile
+                </li>
+              </ul>
+              
+              <div className="flex space-x-3">
+                <Button 
+                  variant="secondary" 
+                  fullWidth
+                  onClick={() => setShowConsentModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="danger" 
+                  fullWidth
+                  onClick={confirmDisableLocation}
+                >
+                  Disable
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      
-      <Footer />
-    </div>
+        )}
+      </div>
+    </ArtisanLayout>
   );
 }

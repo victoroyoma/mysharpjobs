@@ -164,20 +164,27 @@ const EnhancedSearchPage: React.FC = () => {
         if (searchFilters.verification) params.append('verification', searchFilters.verification);
       }
 
-      const endpoint = searchType === 'jobs' ? '/api/search/jobs' : '/api/search/artisans';
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const endpoint = searchType === 'jobs' ? `${API_BASE_URL}/search/jobs` : `${API_BASE_URL}/search/artisans`;
       const response = await fetch(`${endpoint}?${params}`);
       
       if (!response.ok) {
         throw new Error('Search failed');
       }
       
-      const data: SearchResponse = await response.json();
+      const data = await response.json();
+      console.log('Search response:', data);
       
-      if (data.success) {
+      if (data.status === 'success') {
         setResults(page === 1 ? data.data : [...results, ...data.data]);
-        setPagination(data.pagination);
+        setPagination({
+          page: data.pagination?.current_page || page,
+          limit: data.pagination?.per_page || pagination.limit,
+          total: data.pagination?.total || data.data.length,
+          pages: data.pagination?.last_page || 1
+        });
         setSuggestions(data.suggestions || []);
-        setSearchTime(data.searchTime);
+        setSearchTime(data.searchTime || 0);
         
         // Update URL with search parameters
         const newParams = new URLSearchParams();
@@ -185,7 +192,7 @@ const EnhancedSearchPage: React.FC = () => {
         if (searchFilters.category) newParams.set('category', searchFilters.category);
         setSearchParams(newParams);
       } else {
-        showError('Search failed. Please try again.');
+        showError(data.message || 'Search failed. Please try again.');
       }
       
     } catch (error) {
@@ -238,11 +245,9 @@ const EnhancedSearchPage: React.FC = () => {
     return distance < 1000 ? `${Math.round(distance)}m` : `${(distance / 1000).toFixed(1)}km`;
   };
 
-  // Initial search on mount
+  // Initial search on mount - always load all jobs/artisans
   useEffect(() => {
-    if (filters.keyword || searchParams.get('q')) {
-      performSearch(filters);
-    }
+    performSearch(filters);
   }, [searchType]);
 
   return (
