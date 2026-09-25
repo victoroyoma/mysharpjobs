@@ -1,10 +1,17 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPinIcon, BadgeCheckIcon, HomeIcon, BriefcaseIcon, StarIcon, UsersIcon, ShieldCheckIcon, ClockIcon, TrendingUpIcon } from 'lucide-react';
+import { MapPinIcon, BadgeCheckIcon, HomeIcon, BriefcaseIcon, StarIcon, UsersIcon, ShieldCheckIcon, ClockIcon, TrendingUpIcon, ListIcon } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Button from '../components/Button';
+import WaitlistModal from '../components/WaitlistModal';
 
 export default function Landing() {
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+  
+  // Google Form URL - converted to embeddable format
+  const googleFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLSfotZVGHgHbNSoZ0KcGWdhTE9afIBQC_Qpw6YAy0vXpLBgScg/viewform?embedded=true";
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -49,6 +56,22 @@ export default function Landing() {
                     Join as Artisan
                   </Button>
                 </Link>
+                <div className="relative group">
+                  {/* Animated glow effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 rounded-lg blur opacity-75 group-hover:opacity-100 animate-pulse"></div>
+                  <Button 
+                    variant="primary" 
+                    size="lg" 
+                    className="relative w-full sm:w-auto transition-all duration-300 shadow-2xl bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 hover:from-purple-700 hover:via-pink-700 hover:to-purple-700 animate-[pulse_3s_ease-in-out_infinite] border-2 border-white"
+                    onClick={() => setIsWaitlistModalOpen(true)}
+                  >
+                    <ListIcon className="h-5 w-5 mr-2 animate-bounce" />
+                    <span className="font-bold">Join Waitlist</span>
+                    <span className="absolute -top-2 -right-2 bg-yellow-400 text-purple-900 text-xs font-bold px-2 py-1 rounded-full animate-bounce shadow-lg">
+                      🔥 Hot
+                    </span>
+                  </Button>
+                </div>
               </div>
               
               <div className="flex items-center justify-center lg:justify-start space-x-6 text-white">
@@ -369,6 +392,22 @@ export default function Landing() {
                 Join as Artisan
               </Button>
             </Link>
+            <div className="relative group">
+              {/* Animated glow effect */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 rounded-lg blur opacity-75 group-hover:opacity-100 animate-pulse"></div>
+              <Button 
+                variant="primary" 
+                size="lg" 
+                className="relative w-full sm:w-auto transition-all duration-300 shadow-2xl bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 hover:from-purple-700 hover:via-pink-700 hover:to-purple-700 hover:scale-110 animate-[pulse_3s_ease-in-out_infinite] border-2 border-white"
+                onClick={() => setIsWaitlistModalOpen(true)}
+              >
+                <ListIcon className="h-5 w-5 mr-2 animate-bounce" />
+                <span className="font-bold">Join Waitlist</span>
+                <span className="absolute -top-2 -right-2 bg-yellow-400 text-purple-900 text-xs font-bold px-2 py-1 rounded-full animate-bounce shadow-lg">
+                  🔥 Hot
+                </span>
+              </Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
@@ -380,6 +419,13 @@ export default function Landing() {
               <div className="text-3xl font-bold text-white mb-2">5,000+</div>
               <div className="text-blue-200">Verified Artisans</div>
             </div>
+      
+      {/* Waitlist Modal */}
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen}
+        onClose={() => setIsWaitlistModalOpen(false)}
+        googleFormUrl={googleFormUrl}
+      />
             <div className="text-center">
               <div className="text-3xl font-bold text-white mb-2">50,000+</div>
               <div className="text-blue-200">Projects Completed</div>
